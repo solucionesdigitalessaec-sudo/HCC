@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Contacto | HCC · Colegio en casa</title>
+  <meta name="description" content="Contáctanos: resuelve tus dudas sobre HCC, colegio en casa en línea, por correo, WhatsApp o mediante nuestro formulario.">
+  <link rel="icon" href="assets/img/favicon.svg" type="image/svg+xml">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:wght@600;700&family=Nunito:wght@400;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="assets/css/styles.css">
+</head>
+<body>
+  <a class="skip-link" href="#contenido">Saltar al contenido</a>
+
+  <header class="site-header">
+    <div class="container header-inner">
+      <a class="logo" href="index.html">
+        <span class="logo-mark">HCC</span>
+        <span>HCC<small>COLEGIO EN CASA</small></span>
+      </a>
+      <button class="nav-toggle" aria-label="Abrir menú" aria-expanded="false" aria-controls="main-nav">
+        <span></span><span></span><span></span>
+      </button>
+      <nav class="main-nav" id="main-nav" aria-label="Principal">
+        <ul>
+          <li><a href="index.html">Inicio</a></li>
+          <li><a href="nosotros.html">Nosotros</a></li>
+          <li><a href="programas.html">Programas</a></li>
+          <li><a href="contacto.html" aria-current="page">Contacto</a></li>
+          <li><a class="btn btn-primary" href="admisiones.html">Admisiones</a></li>
+        </ul>
+      </nav>
+    </div>
+  </header>
+
+  <main id="contenido">
+    <section class="page-hero">
+      <div class="container">
+        <span class="eyebrow">Contacto</span>
+        <h1>Hablemos</h1>
+        <p>¿Tienes preguntas sobre nuestros programas o el proceso de admisión? Escríbenos y te responderemos pronto.</p>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="container split" style="align-items: start;">
+        <div>
+          <h2>Canales de atención</h2>
+          <p class="muted">Nuestro equipo atiende de lunes a viernes, de 8:00 a. m. a 5:00 p. m.</p>
+          <ul class="contact-list">
+            <li>
+              <span class="card-icon">✉️</span>
+              <div><strong>Correo</strong><a href="mailto:admisiones@tucolegio.com">admisiones@tucolegio.com</a></div>
+            </li>
+            <li>
+              <span class="card-icon">💬</span>
+              <div><strong>WhatsApp</strong><a href="https://wa.me/000000000000">+00 000 000 000</a></div>
+            </li>
+            <li>
+              <span class="card-icon">📱</span>
+              <div><strong>Redes sociales</strong><a href="#">Instagram</a> · <a href="#">Facebook</a></div>
+            </li>
+          </ul>
+          <p class="placeholder-note">Reemplaza el correo, el número de WhatsApp y los enlaces de redes por los reales.</p>
+        </div>
+
+        <form class="form-card" action="#" method="POST" novalidate data-form
+              data-success="¡Gracias por escribirnos! Te responderemos en menos de 24 horas hábiles.">
+          <input type="hidden" name="_subject" value="Nuevo mensaje de contacto — HCC">
+          <div class="form-grid">
+            <div class="field full">
+              <label for="c-nombre">Nombre <span class="req">*</span></label>
+              <input id="c-nombre" name="nombre" type="text" autocomplete="name" required>
+              <p class="error-msg" aria-live="polite"></p>
+            </div>
+            <div class="field">
+              <label for="c-email">Correo <span class="req">*</span></label>
+              <input id="c-email" name="email" type="email" autocomplete="email" required
+                     data-error="Ingresa un correo válido, por ejemplo nombre@correo.com.">
+              <p class="error-msg" aria-live="polite"></p>
+            </div>
+            <div class="field">
+              <label for="c-telefono">Teléfono</label>
+              <input id="c-telefono" name="telefono" type="tel" autocomplete="tel"
+                     pattern="[0-9\+\(\)\s\-]{7,20}" data-error="Ingresa un teléfono válido.">
+              <p class="error-msg" aria-live="polite"></p>
+            </div>
+            <div class="field full">
+              <label for="c-asunto">Asunto <span class="req">*</span></label>
+              <select id="c-asunto" name="asunto" required>
+                <option value="">Selecciona…</option>
+                <option>Información sobre programas</option>
+                <option>Proceso de admisión</option>
+                <option>Costos y formas de pago</option>
+                <option>Otro</option>
+              </select>
+              <p class="error-msg" aria-live="polite"></p>
+            </div>
+            <div class="field full">
+              <label for="c-mensaje">Mensaje <span class="req">*</span></label>
+              <textarea id="c-mensaje" name="mensaje" rows="5" required minlength="10"
+                        data-error="Escribe tu mensaje (mínimo 10 caracteres)."></textarea>
+              <p class="error-msg" aria-live="polite"></p>
+            </div>
+          </div>
+          <div class="hp-field" aria-hidden="true">
+            <label>No llenar este campo <input type="text" name="_gotcha" tabindex="-1" autocomplete="off"></label>
+          </div>
+          <p style="margin-top: 22px;"><button class="btn btn-primary" type="submit">Enviar mensaje</button></p>
+          <div class="form-status" role="status" aria-live="polite"></div>
+        </form>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container">
+      <div class="footer-grid">
+        <div>
+          <a class="logo" href="index.html">
+            <span class="logo-mark">HCC</span>
+            <span>HCC<small>COLEGIO EN CASA</small></span>
+          </a>
+          <p>Educación en línea personalizada para familias que eligen aprender en casa.</p>
+        </div>
+        <div>
+          <h4>Colegio</h4>
+          <ul>
+            <li><a href="nosotros.html">Nosotros</a></li>
+            <li><a href="programas.html">Programas</a></li>
+            <li><a href="admisiones.html">Admisiones</a></li>
+          </ul>
+        </div>
+        <div>
+          <h4>Ayuda</h4>
+          <ul>
+            <li><a href="admisiones.html#preguntas">Preguntas frecuentes</a></li>
+            <li><a href="contacto.html">Contacto</a></li>
+          </ul>
+        </div>
+        <div>
+          <h4>Contacto</h4>
+          <ul>
+            <li><a href="mailto:admisiones@tucolegio.com">admisiones@tucolegio.com</a></li>
+            <li><a href="https://wa.me/000000000000">WhatsApp: +00 000 000 000</a></li>
+          </ul>
+        </div>
+      </div>
+      <div class="footer-bottom">
+        <span>© <span data-year></span> HCC · Colegio en casa. Todos los derechos reservados.</span>
+        <span>Hecho con ❤ para las familias homeschool</span>
+      </div>
+    </div>
+  </footer>
+
+  <script src="assets/js/main.js"></script>
+</body>
+</html>

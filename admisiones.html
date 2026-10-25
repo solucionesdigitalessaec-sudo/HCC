@@ -1,0 +1,349 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Admisiones | HCC · Colegio en casa</title>
+  <meta name="description" content="Proceso de admisión de HCC, colegio en casa en línea: requisitos, pasos, fechas y formulario de solicitud para el próximo ciclo escolar.">
+  <link rel="icon" href="assets/img/favicon.svg" type="image/svg+xml">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:wght@600;700&family=Nunito:wght@400;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="assets/css/styles.css">
+</head>
+<body>
+  <a class="skip-link" href="#contenido">Saltar al contenido</a>
+
+  <header class="site-header">
+    <div class="container header-inner">
+      <a class="logo" href="index.html">
+        <span class="logo-mark">HCC</span>
+        <span>HCC<small>COLEGIO EN CASA</small></span>
+      </a>
+      <button class="nav-toggle" aria-label="Abrir menú" aria-expanded="false" aria-controls="main-nav">
+        <span></span><span></span><span></span>
+      </button>
+      <nav class="main-nav" id="main-nav" aria-label="Principal">
+        <ul>
+          <li><a href="index.html">Inicio</a></li>
+          <li><a href="nosotros.html">Nosotros</a></li>
+          <li><a href="programas.html">Programas</a></li>
+          <li><a href="contacto.html">Contacto</a></li>
+          <li><a class="btn btn-primary" href="admisiones.html" aria-current="page">Admisiones</a></li>
+        </ul>
+      </nav>
+    </div>
+  </header>
+
+  <main id="contenido">
+    <section class="page-hero">
+      <div class="container">
+        <span class="eyebrow">Admisiones abiertas</span>
+        <h1>Únete a la familia HCC</h1>
+        <p>Conoce nuestro proceso de admisión, los requisitos y envía tu solicitud en línea. Un asesor te contactará en un plazo de 48 horas hábiles.</p>
+      </div>
+    </section>
+
+    <!-- Proceso -->
+    <section class="section">
+      <div class="container">
+        <div class="section-header">
+          <span class="eyebrow">Proceso</span>
+          <h2>Cuatro pasos para comenzar</h2>
+        </div>
+        <ol class="steps">
+          <li>
+            <h3>Solicitud en línea</h3>
+            <p>Completa el formulario de esta página. No tiene costo ni compromiso.</p>
+          </li>
+          <li>
+            <h3>Entrevista familiar</h3>
+            <p>Una videollamada de 30 minutos para conocer a la familia y al estudiante.</p>
+          </li>
+          <li>
+            <h3>Evaluación diagnóstica</h3>
+            <p>Identificamos el nivel del estudiante para ubicarlo en el grado adecuado.</p>
+          </li>
+          <li>
+            <h3>Matrícula</h3>
+            <p>Entregas los documentos, formalizas la inscripción y recibes tus accesos.</p>
+          </li>
+        </ol>
+      </div>
+    </section>
+
+    <!-- Requisitos -->
+    <section class="section section-soft">
+      <div class="container split">
+        <div>
+          <span class="eyebrow">Requisitos</span>
+          <h2>Documentos necesarios</h2>
+          <p class="muted">Te pediremos estos documentos al momento de formalizar la matrícula (no son necesarios para enviar la solicitud).</p>
+          <ul class="check-list">
+            <li>Documento de identidad del estudiante</li>
+            <li>Documento de identidad del padre, madre o tutor</li>
+            <li>Certificado de calificaciones del último año cursado</li>
+            <li>Constancia de retiro del colegio anterior (si aplica)</li>
+            <li>Fotografía reciente del estudiante</li>
+          </ul>
+          <p class="placeholder-note">Ajusta esta lista a los requisitos legales de tu país.</p>
+        </div>
+        <div>
+          <span class="eyebrow">Para estudiar en HCC</span>
+          <h2>Lo que necesitas en casa</h2>
+          <ul class="check-list">
+            <li>Computadora o tableta con cámara y micrófono</li>
+            <li>Conexión a internet estable</li>
+            <li>Un espacio tranquilo para estudiar</li>
+            <li>Un adulto acompañante, sobre todo en los primeros grados</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <!-- Formulario -->
+    <section class="section" id="solicitud">
+      <div class="container" style="max-width: 860px;">
+        <div class="section-header">
+          <span class="eyebrow">Solicitud</span>
+          <h2>Formulario de admisión</h2>
+          <p>Los campos marcados con <span style="color: var(--color-error)">*</span> son obligatorios.</p>
+        </div>
+
+        <!--
+          Para recibir las solicitudes por correo, crea un formulario en https://formspree.io
+          y reemplaza action="#" por la URL que te den (ej. https://formspree.io/f/abcdwxyz).
+          Mientras action sea "#", el envío se simula.
+        -->
+        <form class="form-card" action="#" method="POST" novalidate data-form
+              data-success="¡Gracias! Hemos recibido tu solicitud. Un asesor de admisiones te contactará en un plazo de 48 horas hábiles.">
+          <input type="hidden" name="_subject" value="Nueva solicitud de admisión — HCC">
+
+          <fieldset>
+            <legend>Datos del padre, madre o tutor</legend>
+            <div class="form-grid">
+              <div class="field">
+                <label for="tutor-nombre">Nombre completo <span class="req">*</span></label>
+                <input id="tutor-nombre" name="tutor_nombre" type="text" autocomplete="name" required>
+                <p class="error-msg" aria-live="polite"></p>
+              </div>
+              <div class="field">
+                <label for="tutor-parentesco">Parentesco <span class="req">*</span></label>
+                <select id="tutor-parentesco" name="tutor_parentesco" required>
+                  <option value="">Selecciona…</option>
+                  <option>Madre</option>
+                  <option>Padre</option>
+                  <option>Tutor/a legal</option>
+                  <option>Otro</option>
+                </select>
+                <p class="error-msg" aria-live="polite"></p>
+              </div>
+              <div class="field">
+                <label for="tutor-email">Correo electrónico <span class="req">*</span></label>
+                <input id="tutor-email" name="email" type="email" autocomplete="email" required
+                       data-error="Ingresa un correo válido, por ejemplo nombre@correo.com.">
+                <p class="error-msg" aria-live="polite"></p>
+              </div>
+              <div class="field">
+                <label for="tutor-telefono">Teléfono / WhatsApp <span class="req">*</span></label>
+                <input id="tutor-telefono" name="telefono" type="tel" autocomplete="tel" required
+                       pattern="[0-9\+\(\)\s\-]{7,20}" data-error="Ingresa un teléfono válido (solo números, espacios, + o -).">
+                <p class="error-msg" aria-live="polite"></p>
+              </div>
+              <div class="field">
+                <label for="tutor-pais">País <span class="req">*</span></label>
+                <input id="tutor-pais" name="pais" type="text" autocomplete="country-name" required>
+                <p class="error-msg" aria-live="polite"></p>
+              </div>
+              <div class="field">
+                <label for="tutor-ciudad">Ciudad</label>
+                <input id="tutor-ciudad" name="ciudad" type="text" autocomplete="address-level2">
+                <p class="error-msg" aria-live="polite"></p>
+              </div>
+            </div>
+          </fieldset>
+
+          <fieldset>
+            <legend>Datos del estudiante</legend>
+            <div class="form-grid">
+              <div class="field">
+                <label for="est-nombre">Nombre completo <span class="req">*</span></label>
+                <input id="est-nombre" name="estudiante_nombre" type="text" required>
+                <p class="error-msg" aria-live="polite"></p>
+              </div>
+              <div class="field">
+                <label for="est-nacimiento">Fecha de nacimiento <span class="req">*</span></label>
+                <input id="est-nacimiento" name="estudiante_nacimiento" type="date" required>
+                <p class="error-msg" aria-live="polite"></p>
+              </div>
+              <div class="field">
+                <label for="est-grado">Grado al que aplica <span class="req">*</span></label>
+                <select id="est-grado" name="grado" required>
+                  <option value="">Selecciona…</option>
+                  <optgroup label="Preescolar">
+                    <option>Prekínder</option>
+                    <option>Kínder</option>
+                    <option>Transición</option>
+                  </optgroup>
+                  <optgroup label="Primaria">
+                    <option>1.º primaria</option>
+                    <option>2.º primaria</option>
+                    <option>3.º primaria</option>
+                    <option>4.º primaria</option>
+                    <option>5.º primaria</option>
+                    <option>6.º primaria</option>
+                  </optgroup>
+                  <optgroup label="Secundaria">
+                    <option>1.º secundaria</option>
+                    <option>2.º secundaria</option>
+                    <option>3.º secundaria</option>
+                    <option>4.º secundaria</option>
+                    <option>5.º secundaria</option>
+                    <option>6.º secundaria</option>
+                  </optgroup>
+                </select>
+                <p class="error-msg" aria-live="polite"></p>
+              </div>
+              <div class="field">
+                <label for="est-situacion">Situación escolar actual <span class="req">*</span></label>
+                <select id="est-situacion" name="situacion_actual" required>
+                  <option value="">Selecciona…</option>
+                  <option>Asiste a un colegio presencial</option>
+                  <option>Ya estudia en casa (homeschool)</option>
+                  <option>Asiste a otro colegio en línea</option>
+                  <option>No está escolarizado actualmente</option>
+                </select>
+                <p class="error-msg" aria-live="polite"></p>
+              </div>
+              <div class="field full">
+                <label for="est-necesidades">¿Hay algo que debamos saber del estudiante?</label>
+                <textarea id="est-necesidades" name="observaciones" rows="4"
+                          placeholder="Intereses, necesidades de aprendizaje, motivos para elegir educación en casa…"></textarea>
+                <p class="error-msg" aria-live="polite"></p>
+              </div>
+            </div>
+          </fieldset>
+
+          <fieldset>
+            <legend>Para terminar</legend>
+            <div class="form-grid">
+              <div class="field">
+                <label for="fuente">¿Cómo nos conociste?</label>
+                <select id="fuente" name="como_nos_conocio">
+                  <option value="">Selecciona…</option>
+                  <option>Recomendación de otra familia</option>
+                  <option>Redes sociales</option>
+                  <option>Búsqueda en internet</option>
+                  <option>Otro</option>
+                </select>
+              </div>
+              <div class="field">
+                <label for="horario">Mejor horario para contactarte</label>
+                <select id="horario" name="horario_contacto">
+                  <option value="">Selecciona…</option>
+                  <option>Mañana</option>
+                  <option>Tarde</option>
+                  <option>Noche</option>
+                </select>
+              </div>
+              <div class="field full">
+                <label class="field-check" for="acepto">
+                  <input id="acepto" name="acepta_privacidad" type="checkbox" value="sí" required
+                         data-error="Debes aceptar el tratamiento de datos para continuar.">
+                  <span>Autorizo a HCC a usar estos datos únicamente para gestionar mi solicitud de admisión. <span class="req">*</span></span>
+                </label>
+                <p class="error-msg" aria-live="polite"></p>
+              </div>
+            </div>
+          </fieldset>
+
+          <div class="hp-field" aria-hidden="true">
+            <label>No llenar este campo <input type="text" name="_gotcha" tabindex="-1" autocomplete="off"></label>
+          </div>
+
+          <button class="btn btn-primary" type="submit">Enviar solicitud</button>
+          <div class="form-status" role="status" aria-live="polite"></div>
+        </form>
+      </div>
+    </section>
+
+    <!-- FAQ -->
+    <section class="section section-cream" id="preguntas">
+      <div class="container">
+        <div class="section-header">
+          <span class="eyebrow">Preguntas frecuentes</span>
+          <h2>Resolvemos tus dudas</h2>
+        </div>
+        <div class="faq">
+          <details>
+            <summary>¿Los estudios de HCC tienen validez oficial?</summary>
+            <p>Explica aquí el respaldo legal del colegio (registro, convenio o acreditación) y cómo se certifican los grados en tu país.</p>
+          </details>
+          <details>
+            <summary>¿Cuántas horas al día estudia un alumno?</summary>
+            <p>Depende del nivel. Como referencia, en preescolar son sesiones cortas de 1 a 2 horas y en secundaria entre 4 y 5 horas, combinando clases en vivo y trabajo autónomo.</p>
+          </details>
+          <details>
+            <summary>¿Los padres deben enseñar las materias?</summary>
+            <p>No. Nuestros docentes dictan las clases y evalúan. A los padres les pedimos acompañar la rutina y estar en contacto con el equipo, especialmente en los primeros grados.</p>
+          </details>
+          <details>
+            <summary>¿Puedo ingresar a mitad de año?</summary>
+            <p>Sí, aceptamos ingresos durante el año escolar según la disponibilidad de cupos. La evaluación diagnóstica nos ayuda a planear la nivelación necesaria.</p>
+          </details>
+          <details>
+            <summary>¿Cuál es el costo de la matrícula y la mensualidad?</summary>
+            <p>Escríbenos o envía la solicitud y un asesor te compartirá los valores vigentes, las opciones de pago y los descuentos por hermanos.</p>
+          </details>
+          <details>
+            <summary>¿Cómo socializan los estudiantes?</summary>
+            <p>Las clases son en grupos reducidos y en vivo, con trabajos en equipo, clubes virtuales y encuentros presenciales opcionales.</p>
+          </details>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container">
+      <div class="footer-grid">
+        <div>
+          <a class="logo" href="index.html">
+            <span class="logo-mark">HCC</span>
+            <span>HCC<small>COLEGIO EN CASA</small></span>
+          </a>
+          <p>Educación en línea personalizada para familias que eligen aprender en casa.</p>
+        </div>
+        <div>
+          <h4>Colegio</h4>
+          <ul>
+            <li><a href="nosotros.html">Nosotros</a></li>
+            <li><a href="programas.html">Programas</a></li>
+            <li><a href="admisiones.html">Admisiones</a></li>
+          </ul>
+        </div>
+        <div>
+          <h4>Ayuda</h4>
+          <ul>
+            <li><a href="admisiones.html#preguntas">Preguntas frecuentes</a></li>
+            <li><a href="contacto.html">Contacto</a></li>
+          </ul>
+        </div>
+        <div>
+          <h4>Contacto</h4>
+          <ul>
+            <li><a href="mailto:admisiones@tucolegio.com">admisiones@tucolegio.com</a></li>
+            <li><a href="https://wa.me/000000000000">WhatsApp: +00 000 000 000</a></li>
+          </ul>
+        </div>
+      </div>
+      <div class="footer-bottom">
+        <span>© <span data-year></span> HCC · Colegio en casa. Todos los derechos reservados.</span>
+        <span>Hecho con ❤ para las familias homeschool</span>
+      </div>
+    </div>
+  </footer>
+
+  <script src="assets/js/main.js"></script>
+</body>
+</html>
