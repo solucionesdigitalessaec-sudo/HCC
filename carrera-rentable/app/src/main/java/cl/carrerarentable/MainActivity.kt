@@ -1,0 +1,177 @@
+package cl.carrerarentable
+
+import android.app.Activity
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.ComponentName
+import android.content.Intent
+import android.graphics.Color
+import android.graphics.Typeface
+import android.os.Bundle
+import android.provider.Settings
+import android.text.InputType
+import android.view.View
+import android.widget.Button
+import android.widget.CheckBox
+import android.widget.EditText
+import android.widget.LinearLayout
+import android.widget.ScrollView
+import android.widget.TextView
+import android.widget.Toast
+import cl.carrerarentable.core.Money
+import cl.carrerarentable.core.ProfitCalculator
+import cl.carrerarentable.core.RideOffer
+import cl.carrerarentable.core.Rules
+
+class MainActivity : Activity() {
+
+    private lateinit var status: TextView
+    private lateinit var minKm: EditText
+    private lateinit var minHour: EditText
+    private lateinit var costKm: EditText
+    private lateinit var hideSec: EditText
+    private lateinit var vibrate: CheckBox
+    private lateinit var tPrice: EditText
+    private lateinit var tKm: EditText
+    private lateinit var tMin: EditText
+    private lateinit var tResult: TextView
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        val col = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(16), dp(16), dp(16), dp(32))
+        }
+        setContentView(ScrollView(this).apply { addView(col) })
+
+        // 1. Activación
+        col.addView(title("1. Activar lectura de solicitudes"))
+        status = TextView(this).apply { textSize = 16f; typeface = Typeface.DEFAULT_BOLD }
+        col.addView(status)
+        col.addView(note(
+            "Activa \"Carrera Rentable\" en Ajustes › Accesibilidad. Si aparece como \"Ajuste restringido\": " +
+                "Ajustes › Apps › Carrera Rentable › menú ⋮ › \"Permitir ajustes restringidos\", y vuelve a intentarlo."
+        ))
+        col.addView(button("Abrir ajustes de accesibilidad") {
+            startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
+        })
+        col.addView(button("Abrir info de la app (ajustes restringidos)") {
+            startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, android.net.Uri.parse("package:$packageName")))
+        })
+
+        // 2. Reglas
+        col.addView(title("2. Mis reglas"))
+        val r = SettingsStore.rules(this)
+        minKm = field(col, "Mínimo por km ($)", r.minPerKm)
+        minHour = field(col, "Mínimo por hora ($) · 0 = no exigir", r.minPerHour)
+        costKm = field(col, "Mi costo por km ($, bencina + desgaste) · 0 = no descontar", r.costPerKm)
+        hideSec = field(col, "Ocultar panel después de (segundos) · 0 = nunca", SettingsStore.hideSeconds(this).toDouble())
+        vibrate = CheckBox(this).apply {
+            text = "Vibrar al llegar una solicitud (1 vibración = rentable, 2 = no)"
+            isChecked = SettingsStore.vibrate(this@MainActivity)
+        }
+        col.addView(vibrate)
+        col.addView(button("Guardar reglas") {
+            saveRules()
+            Toast.makeText(this, "Reglas guardadas", Toast.LENGTH_SHORT).show()
+        })
+
+        // 3. Calculadora manual
+        col.addView(title("3. Calcular a mano"))
+        tPrice = field(col, "Tarifa ($)", null)
+        tKm = field(col, "Km totales (recogida + viaje)", null)
+        tMin = field(col, "Minutos totales (opcional)", null)
+        tResult = TextView(this).apply { textSize = 16f; setPadding(0, dp(8), 0, dp(8)) }
+        col.addView(button("Calcular") { calculate() })
+        col.addView(tResult)
+
+        // 4. Diagnóstico
+        col.addView(title("4. Si algo no se detecta"))
+        col.addView(note("Copia lo último que la app leyó de la pantalla de Uber/DiDi/Cabify para revisar el formato."))
+        col.addView(button("Copiar último texto leído") {
+            val t = SettingsStore.lastText(this)
+            if (t.isBlank()) {
+                Toast.makeText(this, "Todavía no se ha leído ninguna solicitud", Toast.LENGTH_SHORT).show()
+            } else {
+                getSystemService(ClipboardManager::class.java).setPrimaryClip(ClipData.newPlainText("texto", t))
+                Toast.makeText(this, "Copiado", Toast.LENGTH_SHORT).show()
+            }
+        })
+    }
+
+    override fun onResume() {
+        super.onResume()
+        val on = isServiceEnabled()
+        status.text = if (on) "● Lectura ACTIVA" else "● Lectura DESACTIVADA"
+        status.setTextColor(Color.parseColor(if (on) "#16A34A" else "#DC2626"))
+    }
+
+    override fun onPause() {
+        saveRules()
+        super.onPause()
+    }
+
+    private fun saveRules() {
+        SettingsStore.saveRules(this, Rules(num(minKm) ?: 700.0, num(minHour) ?: 0.0, num(costKm) ?: 0.0))
+        SettingsStore.setHideSeconds(this, (num(hideSec) ?: 20.0).toInt())
+        SettingsStore.setVibrate(this, vibrate.isChecked)
+    }
+
+    private fun calculate() {
+        val price = num(tPrice)
+        val km = num(tKm)
+        if (price == null || km == null || km <= 0) {
+            tResult.text = "Ingresa tarifa y kilómetros."
+            return
+        }
+        saveRules()
+        val rules = SettingsStore.rules(this)
+        val ev = ProfitCalculator.evaluate(RideOffer(price, km, num(tMin)?.takeIf { it > 0 }), rules)
+        tResult.setTextColor(Color.parseColor(if (ev.profitable) "#16A34A" else "#DC2626"))
+        tResult.text = buildString {
+            appendLine(if (ev.profitable) "✅ RENTABLE" else "❌ NO RENTABLE")
+            appendLine("Valor km: ${Money.clp(ev.perKm)}/km (mínimo ${Money.clp(rules.minPerKm)})")
+            ev.perHour?.let { appendLine("Por hora: ${Money.clp(it)}/h") }
+            if (rules.costPerKm > 0) appendLine("Te queda: ${Money.clp(ev.net)}")
+            if (!ev.perKmOk) append("Para ser rentable debería pagar ${Money.clp(rules.minPerKm * km)}")
+        }
+    }
+
+    private fun isServiceEnabled(): Boolean {
+        val me = ComponentName(this, RideAccessibilityService::class.java)
+        val enabled = Settings.Secure.getString(contentResolver, Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES) ?: return false
+        return enabled.split(':').any { ComponentName.unflattenFromString(it) == me }
+    }
+
+    // ---------- helpers de interfaz ----------
+
+    /** Acepta "6.980", "6,980", "700" o "15,3" (km). */
+    private fun num(e: EditText): Double? {
+        val s = e.text.toString().trim().replace(" ", "").replace("$", "")
+        if (s.isEmpty()) return null
+        val normalized = if (Regex("""\d{1,3}([.,]\d{3})+""").matches(s)) s.replace(".", "").replace(",", "")
+        else s.replace(',', '.')
+        return normalized.toDoubleOrNull()
+    }
+
+    private fun field(parent: LinearLayout, label: String, value: Double?): EditText {
+        parent.addView(TextView(this).apply { text = label; setPadding(0, dp(8), 0, 0) })
+        return EditText(this).apply {
+            inputType = InputType.TYPE_CLASS_NUMBER or InputType.TYPE_NUMBER_FLAG_DECIMAL
+            if (value != null) setText(if (value % 1.0 == 0.0) value.toLong().toString() else value.toString())
+            parent.addView(this)
+        }
+    }
+
+    private fun title(t: String) = TextView(this).apply {
+        text = t; textSize = 20f; typeface = Typeface.DEFAULT_BOLD; setPadding(0, dp(20), 0, dp(4))
+    }
+
+    private fun note(t: String) = TextView(this).apply { text = t; setTextColor(Color.GRAY); textSize = 13f }
+
+    private fun button(t: String, onClick: (View) -> Unit) = Button(this).apply {
+        text = t; setOnClickListener(onClick)
+    }
+
+    private fun dp(v: Int) = (v * resources.displayMetrics.density).toInt()
+}

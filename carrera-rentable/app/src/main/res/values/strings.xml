@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Carrera Rentable</string>
+    <string name="service_label">Carrera Rentable · lector de solicitudes</string>
+    <string name="service_description">Lee la tarifa, los kilómetros y los minutos de las solicitudes de viaje en Uber, DiDi y Cabify para mostrarte un panel con el valor por km y por hora. Solo lee esas apps, no toca ni acepta nada, y nada sale de tu teléfono.</string>
+</resources>
