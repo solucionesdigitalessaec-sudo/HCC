@@ -15,6 +15,10 @@ tarifa, los kilómetros y los minutos de la pantalla y muestra un panel flotante
 Arriba aparece **✅ RENTABLE** (verde) o **❌ NO RENTABLE** (rojo). Por defecto una carrera es
 rentable si paga **$700 o más por km**. Puedes cambiar el mínimo y agregar un mínimo por hora.
 
+Cuando la carrera es **rentable suena un aviso** (tres tonos) para que lo sepas sin mirar el
+teléfono; las no rentables no suenan. Se puede apagar y probar en la pantalla de ajustes. Usa el
+volumen de notificaciones, así que respeta el modo silencio.
+
 Ejemplo (la solicitud de Uber de la captura): $6.980 · 9 min (3,6 km) + 22 min (14 km)
 → 17,6 km, 31 min → **$397/km**, $13.510/h → **NO RENTABLE** (le faltan $5.340 para llegar a $700/km).
 

@@ -27,6 +27,9 @@ object SettingsStore {
     fun vibrate(c: Context) = prefs(c).getBoolean("vibrar", true)
     fun setVibrate(c: Context, v: Boolean) = prefs(c).edit().putBoolean("vibrar", v).apply()
 
+    fun sound(c: Context) = prefs(c).getBoolean("sonido", true)
+    fun setSound(c: Context, v: Boolean) = prefs(c).edit().putBoolean("sonido", v).apply()
+
     fun overlayY(c: Context) = prefs(c).getInt("panel_y", 140)
     fun setOverlayY(c: Context, y: Int) = prefs(c).edit().putInt("panel_y", y).apply()
 

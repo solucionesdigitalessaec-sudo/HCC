@@ -31,6 +31,7 @@ class MainActivity : Activity() {
     private lateinit var costKm: EditText
     private lateinit var hideSec: EditText
     private lateinit var vibrate: CheckBox
+    private lateinit var sound: CheckBox
     private lateinit var tPrice: EditText
     private lateinit var tKm: EditText
     private lateinit var tMin: EditText
@@ -71,6 +72,12 @@ class MainActivity : Activity() {
             isChecked = SettingsStore.vibrate(this@MainActivity)
         }
         col.addView(vibrate)
+        sound = CheckBox(this).apply {
+            text = "Sonido cuando la carrera es rentable"
+            isChecked = SettingsStore.sound(this@MainActivity)
+        }
+        col.addView(sound)
+        col.addView(button("Probar sonido") { Alerts.playProfitable() })
         col.addView(button("Guardar reglas") {
             saveRules()
             Toast.makeText(this, "Reglas guardadas", Toast.LENGTH_SHORT).show()
@@ -115,6 +122,7 @@ class MainActivity : Activity() {
         SettingsStore.saveRules(this, Rules(num(minKm) ?: 700.0, num(minHour) ?: 0.0, num(costKm) ?: 0.0))
         SettingsStore.setHideSeconds(this, (num(hideSec) ?: 20.0).toInt())
         SettingsStore.setVibrate(this, vibrate.isChecked)
+        SettingsStore.setSound(this, sound.isChecked)
     }
 
     private fun calculate() {

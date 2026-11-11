@@ -62,6 +62,7 @@ class RideAccessibilityService : AccessibilityService() {
         val evaluation = ProfitCalculator.evaluate(offer, rules)
         overlay.show(evaluation, rules, SettingsStore.hideSeconds(this))
         if (SettingsStore.vibrate(this)) buzz(evaluation.profitable)
+        if (evaluation.profitable && SettingsStore.sound(this)) Alerts.playProfitable()
     }
 
     /** Junta el texto de todas las ventanas que pertenecen a una app de conductor. */
