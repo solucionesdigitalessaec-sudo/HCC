@@ -54,6 +54,13 @@ powershell -ExecutionPolicy Bypass -File descargar-apks.ps1
 Crea `Documentos\KMRentable\APK` y baja ahí cada versión (`kmrentable-v1.6.apk`, ...).
 Si lo vuelves a ejecutar, solo baja las nuevas.
 
+## Firma de la app
+
+Todas las versiones se firman con la misma clave para poder instalarlas encima de la anterior.
+La clave se crea una vez en GitHub Actions y se guarda en su **caché privada** (no está en el código).
+Si pasan más de 7 días sin compilar, GitHub puede borrar esa caché: se crea una clave nueva y hay que
+desinstalar e instalar una vez. Lo mismo pasa la primera vez que se compile en otra rama (por ejemplo `main`).
+
 ## Si una solicitud no se detecta bien
 
 Cada app muestra los datos con formato distinto y lo cambian seguido. En la app, sección 4,

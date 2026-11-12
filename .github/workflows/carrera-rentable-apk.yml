@@ -30,6 +30,31 @@ jobs:
         with:
           gradle-version: "8.14.3"
 
+      # Clave de firma fija guardada en la caché privada de Actions (nunca en el repositorio).
+      - name: Recuperar clave de firma
+        id: firma
+        uses: actions/cache@v4
+        with:
+          path: ~/.kmrentable-firma
+          key: kmrentable-firma-v1
+
+      - name: Crear clave de firma (solo la primera vez)
+        if: steps.firma.outputs.cache-hit != 'true'
+        run: |
+          mkdir -p ~/.kmrentable-firma
+          openssl rand -hex 24 > ~/.kmrentable-firma/pass
+          P="$(cat ~/.kmrentable-firma/pass)"
+          keytool -genkeypair -noprompt -keystore ~/.kmrentable-firma/kmrentable.keystore \
+            -storepass "$P" -keypass "$P" -alias kmrentable -keyalg RSA -keysize 2048 \
+            -validity 10000 -dname "CN=KMRentable, C=CL"
+
+      - name: Usar clave de firma
+        run: |
+          P="$(cat ~/.kmrentable-firma/pass)"
+          echo "::add-mask::$P"
+          echo "KMR_KEYSTORE=$HOME/.kmrentable-firma/kmrentable.keystore" >> "$GITHUB_ENV"
+          echo "KMR_STORE_PASS=$P" >> "$GITHUB_ENV"
+
       - name: Pruebas y compilación
         run: gradle :core:test :app:assembleDebug -PbuildNumber=${{ github.run_number }} --no-daemon
 
