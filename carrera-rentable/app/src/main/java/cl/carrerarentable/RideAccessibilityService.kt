@@ -25,6 +25,12 @@ class RideAccessibilityService : AccessibilityService() {
     private var lastOfferAt = 0L
     private var lastDiagWrite = 0L
 
+    /** Raíz de la pantalla obtenida desde el último aviso de la app de conductor. */
+    private var eventRoot: AccessibilityNodeInfo? = null
+    /** Textos que vienen dentro de los avisos recientes (por si no se puede recorrer la pantalla). */
+    private val eventTexts = LinkedHashMap<String, Long>()
+    private var eventSourceInfo = "sin datos"
+
     override fun onServiceConnected() {
         super.onServiceConnected()
         overlay = OverlayPanel(this)
@@ -37,6 +43,18 @@ class RideAccessibilityService : AccessibilityService() {
         Diag.eventFrom(this, pkg)
         if (!RideApps.isRideApp(pkg)) return
         Diag.rideEvent(this, pkg)
+
+        val now = SystemClock.elapsedRealtime()
+        (event.text.orEmpty() + listOfNotNull(event.contentDescription)).forEach { t ->
+            t?.toString()?.takeIf { it.isNotBlank() }?.let { eventTexts[it] = now }
+        }
+        eventTexts.entries.removeAll { now - it.value > 4000 }
+        while (eventTexts.size > 200) eventTexts.remove(eventTexts.keys.first())
+
+        val source = runCatching { event.source }.getOrNull()
+        eventSourceInfo = if (source == null) "aviso sin contenido (source=null)" else "aviso con contenido"
+        source?.let { eventRoot = topOf(it) }
+
         // Las apps lanzan muchos eventos seguidos: se agrupan y se lee la pantalla una sola vez.
         handler.removeCallbacks(scan)
         handler.postDelayed(scan, 250)
@@ -51,6 +69,7 @@ class RideAccessibilityService : AccessibilityService() {
         if (offer != null || now - lastDiagWrite > 1000) {
             lastDiagWrite = now
             Diag.scan(this, windowCount, OfferParser.normalize(lines), offer != null)
+            Diag.windows(this, describeWindows() + " · " + eventSourceInfo)
         }
         if (lines.isEmpty()) return
         if (offer == null) {
@@ -78,8 +97,13 @@ class RideAccessibilityService : AccessibilityService() {
     /** Junta el texto de todas las ventanas que pertenecen a una app de conductor. */
     private fun collectRideAppText(): Pair<Int, List<String>> {
         val roots = ArrayList<AccessibilityNodeInfo>()
-        runCatching { windows }.getOrNull()?.forEach { w -> w.root?.let { roots += it } }
-        rootInActiveWindow?.let { active -> if (roots.none { it.windowId == active.windowId }) roots += active }
+        fun addRoot(n: AccessibilityNodeInfo?) {
+            if (n != null && roots.none { it.windowId == n.windowId }) roots += n
+        }
+        runCatching { windows }.getOrNull()?.forEach { w -> addRoot(runCatching { w.root }.getOrNull()) }
+        addRoot(rootInActiveWindow)
+        // Algunas apps no aparecen en la lista de ventanas: se usa la pantalla del último aviso.
+        eventRoot?.let { r -> if (runCatching { r.refresh() }.getOrDefault(false)) addRoot(r) else eventRoot = null }
 
         val out = ArrayList<String>()
         var count = 0
@@ -88,7 +112,31 @@ class RideAccessibilityService : AccessibilityService() {
             count++
             walk(root, out, 0)
         }
+        // Respaldo: el texto que venía dentro de los avisos.
+        if (out.isEmpty()) out += eventTexts.keys
         return count to out
+    }
+
+    private fun topOf(node: AccessibilityNodeInfo): AccessibilityNodeInfo {
+        var n = node
+        repeat(60) { n = runCatching { n.parent }.getOrNull() ?: return n }
+        return n
+    }
+
+    /** Resumen de las ventanas visibles para el diagnóstico: "app(tipo)" o "?(tipo)" si no se puede leer. */
+    private fun describeWindows(): String {
+        val ws = runCatching { windows }.getOrNull() ?: return "ventanas: no disponibles"
+        return "ventanas: " + ws.joinToString(", ") { w ->
+            val pkg = runCatching { w.root?.packageName?.toString() }.getOrNull() ?: "?"
+            val type = when (w.type) {
+                android.view.accessibility.AccessibilityWindowInfo.TYPE_APPLICATION -> "app"
+                android.view.accessibility.AccessibilityWindowInfo.TYPE_SYSTEM -> "sistema"
+                android.view.accessibility.AccessibilityWindowInfo.TYPE_INPUT_METHOD -> "teclado"
+                android.view.accessibility.AccessibilityWindowInfo.TYPE_ACCESSIBILITY_OVERLAY -> "panel"
+                else -> "otro"
+            }
+            "${pkg.substringAfterLast('.')}($type${w.title?.let { ":" + it.toString().take(20) } ?: ""})"
+        }
     }
 
     /** Panel de ejemplo para comprobar que el servicio puede dibujar sobre la pantalla. */

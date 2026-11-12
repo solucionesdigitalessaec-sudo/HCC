@@ -27,6 +27,8 @@ object Diag {
     fun rideEvent(c: Context, pkg: String) =
         prefs(c).edit().putString("evento", "$pkg · ${now()}").apply()
 
+    fun windows(c: Context, info: String) = prefs(c).edit().putString("ventanas", info).apply()
+
     fun scan(c: Context, windows: Int, texts: List<String>, offerFound: Boolean) =
         prefs(c).edit()
             .putString("lectura", "${now()} · ventanas: $windows · textos: ${texts.size} · oferta: ${if (offerFound) "SÍ" else "no"}")
@@ -40,6 +42,7 @@ object Diag {
             appendLine("Servicio conectado: ${v("conectado")}")
             appendLine("Último evento de app de conductor: ${v("evento")}")
             appendLine("Última lectura: ${v("lectura")}")
+            appendLine("Pantalla: ${v("ventanas")}")
             appendLine("Apps vistas: ${p.getString("paquetes", "").orEmpty().ifBlank { "ninguna" }.replace(",", ", ")}")
         }.trim()
     }
