@@ -10,6 +10,7 @@ import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
 import cl.carrerarentable.core.OfferParser
 import cl.carrerarentable.core.ProfitCalculator
+import cl.carrerarentable.core.ScreenFilter
 
 /**
  * Lee el texto visible de Uber / DiDi / Cabify. Cuando aparece una solicitud con tarifa y
@@ -75,16 +76,40 @@ class RideAccessibilityService : AccessibilityService() {
         handleOffer(offer, lines)
     }
 
+    /** Solicitud leída por imagen que todavía no se confirma (debe repetirse en la captura siguiente). */
+    private var pendingSignature: String? = null
+
     /**
      * Texto reconocido en la captura de pantalla (lectura por imagen, ver ShiftService).
-     * Devuelve true si encontró una solicitud.
+     * Para evitar "carreras fantasma":
+     *  - debe verse el botón para aceptar,
+     *  - solo cuentan los tramos "X min (Y km)" (no km sueltos del mapa),
+     *  - la misma solicitud debe leerse igual en dos capturas seguidas antes de mostrarla.
+     * Devuelve true si hay una solicitud en pantalla.
      */
     fun onScreenText(lines: List<String>): Boolean {
         if (!::overlay.isInitialized) return false
-        val offer = if (lines.isEmpty()) null else OfferParser.parse(lines)
+        val offer = if (lines.isEmpty() || !ScreenFilter.hasAcceptButton(lines)) null
+        else OfferParser.parse(lines, requireLegs = true)
+        if (offer == null) {
+            pendingSignature = null
+            handleOffer(null, lines)
+            return false
+        }
+        val signature = signatureOf(offer)
+        val alreadyShown = signature == lastSignature && overlay.isShowing
+        if (!alreadyShown && signature != pendingSignature) {
+            // Primera vez que se ve: esperar la próxima captura para confirmarla.
+            pendingSignature = signature
+            lastOfferAt = SystemClock.elapsedRealtime() // no ocultar el panel actual mientras tanto
+            return true
+        }
+        pendingSignature = null
         handleOffer(offer, lines)
-        return offer != null
+        return true
     }
+
+    private fun signatureOf(o: cl.carrerarentable.core.RideOffer) = "${o.price}|${o.distanceKm}|${o.durationMin}"
 
     /** Muestra, actualiza u oculta el panel. Sirve tanto para la lectura de texto como por imagen. */
     private fun handleOffer(offer: cl.carrerarentable.core.RideOffer?, lines: List<String>) {
@@ -99,7 +124,7 @@ class RideAccessibilityService : AccessibilityService() {
         }
 
         lastOfferAt = now
-        val signature = "${offer.price}|${offer.distanceKm}|${offer.durationMin}"
+        val signature = signatureOf(offer)
         if (signature == lastSignature && overlay.isShowing) return
         lastSignature = signature
 

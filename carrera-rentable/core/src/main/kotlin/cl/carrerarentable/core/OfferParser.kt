@@ -24,7 +24,9 @@ object OfferParser {
 
     private const val TIME = """(?:(\d+)\s*(?:h|hr|hrs|horas?)\.?\s*)?(\d+)\s*(?:min|mins|minutos?)\b\.?"""
     private const val DIST = """(\d+(?:[.,]\d+)?)\s*(km|kms|kil[oó]metros?|m|mts|metros?)\b"""
-    private const val SEP = """\s*[·•|,\-–—]\s*(?:a\s+)?"""
+    // Separador entre tiempo y distancia en la MISMA línea: "·", "•", "-", "|" o nada
+    // (el reconocimiento de imagen a veces no ve el punto: "4 min 1.6 km").
+    private const val SEP = """[ \t]*[^\w\n(]{0,3}[ \t]*(?:a[ \t]+)?"""
 
     private val opts = setOf(RegexOption.IGNORE_CASE)
 
@@ -57,9 +59,15 @@ object OfferParser {
         opts,
     )
 
-    fun parse(lines: List<String>): RideOffer? = parse(normalize(lines).joinToString("\n"))
+    /**
+     * @param requireLegs si es true, solo acepta tramos "X min (Y km)" / "X min · Y km" y no suma
+     * kilómetros sueltos. Se usa con la lectura por imagen, donde el mapa de fondo trae textos
+     * con "km" o "min" que no son de la solicitud.
+     */
+    fun parse(lines: List<String>, requireLegs: Boolean = false): RideOffer? =
+        parse(normalize(lines).joinToString("\n"), requireLegs)
 
-    fun parse(text: String): RideOffer? {
+    fun parse(text: String, requireLegs: Boolean = false): RideOffer? {
         val legs = mutableListOf<Pair<IntRange, Leg>>()
         fun overlaps(r: IntRange) = legs.any { it.first.first <= r.last && r.first <= it.first.last }
 
@@ -81,6 +89,7 @@ object OfferParser {
             durationMin = legs.sumOf { it.second.minutes }
             firstDistancePos = legs.first().first.first
         } else {
+            if (requireLegs) return null
             val dists = DIST_RE.findAll(text).toList()
             if (dists.isEmpty()) return null
             distanceKm = dists.sumOf { km(it.groupValues[1], it.groupValues[2]) }

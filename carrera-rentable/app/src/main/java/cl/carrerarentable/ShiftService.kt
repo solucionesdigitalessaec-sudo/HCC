@@ -24,6 +24,8 @@ import android.os.IBinder
 import android.os.Looper
 import android.os.PowerManager
 import android.view.WindowManager
+import cl.carrerarentable.core.ScreenFilter
+import cl.carrerarentable.core.ScreenLine
 import com.google.mlkit.vision.common.InputImage
 import com.google.mlkit.vision.text.TextRecognition
 import com.google.mlkit.vision.text.TextRecognizer
@@ -153,12 +155,19 @@ class ShiftService : Service() {
         busy = true
         recognizer?.process(InputImage.fromBitmap(bitmap, 0))
             ?.addOnSuccessListener { result ->
-                val lines = result.textBlocks
+                val raw = result.textBlocks
                     .flatMap { it.lines }
                     .sortedWith(compareBy({ it.boundingBox?.top ?: 0 }, { it.boundingBox?.left ?: 0 }))
-                    .map { it.text }
-                val found = RideAccessibilityService.instance?.onScreenText(lines) ?: false
-                diag("líneas: ${lines.size} · oferta: ${if (found) "SÍ" else "no"}", lines, found)
+                    .map { ScreenLine(it.text, it.boundingBox?.top ?: 0, it.boundingBox?.bottom ?: 0) }
+                // Quitar nuestro propio panel si quedó en la captura; si no se puede, descartarla.
+                val cleaned = ScreenFilter.removeOwnPanel(raw)
+                if (cleaned == null) {
+                    diag("captura descartada: se veía nuestro panel", raw.map { it.text })
+                } else {
+                    val lines = cleaned.map { it.text }
+                    val found = RideAccessibilityService.instance?.onScreenText(lines) ?: false
+                    diag("líneas: ${lines.size} · oferta: ${if (found) "SÍ" else "no"}", lines, found)
+                }
             }
             ?.addOnFailureListener { e -> diag("error al reconocer texto: ${e.message}") }
             ?.addOnCompleteListener { busy = false }
