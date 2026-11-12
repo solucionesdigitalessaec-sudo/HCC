@@ -36,6 +36,7 @@ class MainActivity : Activity() {
     private lateinit var tKm: EditText
     private lateinit var tMin: EditText
     private lateinit var tResult: TextView
+    private lateinit var diag: TextView
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -96,16 +97,22 @@ class MainActivity : Activity() {
         col.addView(tResult)
 
         // 4. Diagnóstico
-        col.addView(title("4. Si algo no se detecta"))
-        col.addView(note("Copia lo último que la app leyó de la pantalla de Uber/DiDi/Cabify para revisar el formato."))
-        col.addView(button("Copiar último texto leído") {
-            val t = SettingsStore.lastText(this)
-            if (t.isBlank()) {
-                Toast.makeText(this, "Todavía no se ha leído ninguna solicitud", Toast.LENGTH_SHORT).show()
+        col.addView(title("4. Si algo no funciona"))
+        col.addView(button("Mostrar panel de prueba") {
+            val svc = RideAccessibilityService.instance
+            if (svc == null) {
+                Toast.makeText(this, "El servicio no está corriendo: actívalo en Accesibilidad", Toast.LENGTH_LONG).show()
             } else {
-                getSystemService(ClipboardManager::class.java).setPrimaryClip(ClipData.newPlainText("texto", t))
-                Toast.makeText(this, "Copiado", Toast.LENGTH_SHORT).show()
+                svc.showTestPanel()
             }
+        })
+        diag = TextView(this).apply { textSize = 13f; setTextIsSelectable(true); setPadding(0, dp(8), 0, dp(8)) }
+        col.addView(diag)
+        col.addView(note("Si no aparece el panel en Uber/DiDi/Cabify: deja llegar una solicitud, vuelve aquí y toca \"Copiar diagnóstico\". Pégalo en el chat."))
+        col.addView(button("Copiar diagnóstico") {
+            val t = Diag.report(this) + "\n\n--- Último texto leído ---\n" + Diag.lastText(this).ifBlank { SettingsStore.lastText(this) }
+            getSystemService(ClipboardManager::class.java).setPrimaryClip(ClipData.newPlainText("diagnostico", t))
+            Toast.makeText(this, "Copiado", Toast.LENGTH_SHORT).show()
         })
     }
 
@@ -114,6 +121,11 @@ class MainActivity : Activity() {
         val on = isServiceEnabled()
         status.text = if (on) "● Lectura ACTIVA" else "● Lectura DESACTIVADA"
         status.setTextColor(Color.parseColor(if (on) "#16A34A" else "#DC2626"))
+        if (on && RideAccessibilityService.instance == null) {
+            status.text = "● Activada, pero el servicio no está corriendo: apágala y préndela en Accesibilidad"
+            status.setTextColor(Color.parseColor("#D97706"))
+        }
+        diag.text = Diag.report(this)
     }
 
     override fun onPause() {

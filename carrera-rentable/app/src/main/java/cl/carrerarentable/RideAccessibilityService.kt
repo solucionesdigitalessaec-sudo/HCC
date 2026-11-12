@@ -23,14 +23,20 @@ class RideAccessibilityService : AccessibilityService() {
 
     private var lastSignature: String? = null
     private var lastOfferAt = 0L
+    private var lastDiagWrite = 0L
 
     override fun onServiceConnected() {
         super.onServiceConnected()
         overlay = OverlayPanel(this)
+        instance = this
+        Diag.serviceConnected(this)
     }
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
-        if (!RideApps.isRideApp(event?.packageName?.toString())) return
+        val pkg = event?.packageName?.toString() ?: return
+        Diag.eventFrom(this, pkg)
+        if (!RideApps.isRideApp(pkg)) return
+        Diag.rideEvent(this, pkg)
         // Las apps lanzan muchos eventos seguidos: se agrupan y se lee la pantalla una sola vez.
         handler.removeCallbacks(scan)
         handler.postDelayed(scan, 250)
@@ -38,11 +44,15 @@ class RideAccessibilityService : AccessibilityService() {
 
     private fun scanNow() {
         if (!::overlay.isInitialized) return
-        val lines = collectRideAppText()
-        if (lines.isEmpty()) return
-
-        val offer = OfferParser.parse(lines)
+        val (windowCount, lines) = collectRideAppText()
+        val offer = if (lines.isEmpty()) null else OfferParser.parse(lines)
         val now = SystemClock.elapsedRealtime()
+        // Diagnóstico: como máximo una vez por segundo, y siempre que se detecta una oferta.
+        if (offer != null || now - lastDiagWrite > 1000) {
+            lastDiagWrite = now
+            Diag.scan(this, windowCount, OfferParser.normalize(lines), offer != null)
+        }
+        if (lines.isEmpty()) return
         if (offer == null) {
             // La solicitud desapareció (aceptada, rechazada o expirada).
             if (overlay.isShowing && now - lastOfferAt > 2500) {
@@ -66,17 +76,28 @@ class RideAccessibilityService : AccessibilityService() {
     }
 
     /** Junta el texto de todas las ventanas que pertenecen a una app de conductor. */
-    private fun collectRideAppText(): List<String> {
-        val roots = buildList {
-            runCatching { windows }.getOrNull()?.forEach { w -> w.root?.let { add(it) } }
-            if (isEmpty()) rootInActiveWindow?.let { add(it) }
-        }
+    private fun collectRideAppText(): Pair<Int, List<String>> {
+        val roots = ArrayList<AccessibilityNodeInfo>()
+        runCatching { windows }.getOrNull()?.forEach { w -> w.root?.let { roots += it } }
+        rootInActiveWindow?.let { active -> if (roots.none { it.windowId == active.windowId }) roots += active }
+
         val out = ArrayList<String>()
+        var count = 0
         for (root in roots) {
             if (!RideApps.isRideApp(root.packageName?.toString())) continue
+            count++
             walk(root, out, 0)
         }
-        return out
+        return count to out
+    }
+
+    /** Panel de ejemplo para comprobar que el servicio puede dibujar sobre la pantalla. */
+    fun showTestPanel() {
+        if (!::overlay.isInitialized) return
+        val rules = SettingsStore.rules(this)
+        val offer = OfferParser.parse("CLP9,518\n4 min • 1.6 km\n29 min • 25.0 km") ?: return
+        overlay.show(ProfitCalculator.evaluate(offer, rules), rules, 8)
+        if (SettingsStore.vibrate(this)) buzz(false)
     }
 
     private fun walk(node: AccessibilityNodeInfo, out: MutableList<String>, depth: Int) {
@@ -98,8 +119,14 @@ class RideAccessibilityService : AccessibilityService() {
     override fun onInterrupt() {}
 
     override fun onDestroy() {
+        if (instance === this) instance = null
         handler.removeCallbacksAndMessages(null)
         if (::overlay.isInitialized) overlay.hide()
         super.onDestroy()
+    }
+
+    companion object {
+        /** Servicio en ejecución (null si la accesibilidad está apagada o Android lo detuvo). */
+        @Volatile var instance: RideAccessibilityService? = null
     }
 }

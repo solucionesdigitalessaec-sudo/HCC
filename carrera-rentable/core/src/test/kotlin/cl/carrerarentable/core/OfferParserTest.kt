@@ -39,6 +39,24 @@ class OfferParserTest {
     }
 
     @Test
+    fun uberPriorityRealScreenshot() {
+        val offer = OfferParser.parse(
+            listOf(
+                "Uber Priority", "Exclusivo", "CLP9,518", "CLP358/km est.",
+                "+CLP1,427.00 incluido para",
+                "4 min • 1.6 km", "Avenida Ossa, Metro Plaza Egaña, La Reina",
+                "Tarjeta de crédito verifica…", "Pago con tarjeta", "5.00", "MARCO ANTONIO",
+                "29 min • 25.0 km", "Calle Pedro Riveros 1618, Quilicura", "Aceptar",
+            )
+        )
+        assertNotNull(offer)
+        assertEquals(9518.0, offer.price)
+        near(26.6, offer.distanceKm)
+        near(33.0, offer.durationMin)
+        assertFalse(ProfitCalculator.evaluate(offer, Rules()).profitable)
+    }
+
+    @Test
     fun didiDotThousandsAndCommaDecimals() {
         val offer = OfferParser.parse(listOf("$5.803", "3,2 km (8 min)", "12,1 km (19 min)", "Aceptar"))
         assertNotNull(offer)
