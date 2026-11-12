@@ -13,8 +13,10 @@ android {
         applicationId = "cl.carrerarentable"
         minSdk = 26
         targetSdk = 35
-        versionCode = 1
-        versionName = "1.0"
+        // En GitHub Actions se pasa -PbuildNumber=<n> y cada compilación queda como versión 1.<n>.
+        val buildNumber = (project.findProperty("buildNumber") as String?)?.toIntOrNull() ?: 1
+        versionCode = buildNumber
+        versionName = "1.$buildNumber"
     }
 
     buildTypes {

@@ -45,6 +45,9 @@ class MainActivity : Activity() {
         }
         setContentView(ScrollView(this).apply { addView(col) })
 
+        val version = runCatching { packageManager.getPackageInfo(packageName, 0).versionName }.getOrNull()
+        col.addView(note("Versión ${version ?: "?"}"))
+
         // 1. Activación
         col.addView(title("1. Activar lectura de solicitudes"))
         status = TextView(this).apply { textSize = 16f; typeface = Typeface.DEFAULT_BOLD }

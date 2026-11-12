@@ -37,6 +37,20 @@ violar los términos de las plataformas). Nada sale del teléfono; no usa intern
 
 El panel se cierra tocándolo, se mueve arrastrándolo y se oculta solo tras 20 s (configurable).
 
+## Guardar todas las versiones en tu PC
+
+Cada vez que se cambia algo, GitHub construye una versión nueva (**v1.4, v1.5, ...**) y la guarda
+en *Releases*. La versión aparece arriba en la pantalla de la app.
+
+Para tenerlas todas en tu PC, en PowerShell, dentro de esta carpeta:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File descargar-apks.ps1
+```
+
+Crea `Documentos\CarreraRentable\APK` y baja ahí cada versión (`carrera-rentable-v1.4.apk`, ...).
+Si lo vuelves a ejecutar, solo baja las nuevas.
+
 ## Si una solicitud no se detecta bien
 
 Cada app muestra los datos con formato distinto y lo cambian seguido. En la app, sección 4,

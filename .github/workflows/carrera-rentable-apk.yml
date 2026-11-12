@@ -16,6 +16,8 @@ jobs:
     defaults:
       run:
         working-directory: carrera-rentable
+    env:
+      VERSION: "1.${{ github.run_number }}"
     steps:
       - uses: actions/checkout@v4
 
@@ -29,21 +31,35 @@ jobs:
           gradle-version: "8.14.3"
 
       - name: Pruebas y compilación
-        run: gradle :core:test :app:assembleDebug --no-daemon
+        run: gradle :core:test :app:assembleDebug -PbuildNumber=${{ github.run_number }} --no-daemon
 
-      - name: Renombrar APK
-        run: cp app/build/outputs/apk/debug/app-debug.apk carrera-rentable.apk
+      - name: Nombrar APK con su versión
+        run: |
+          cp app/build/outputs/apk/debug/app-debug.apk carrera-rentable.apk
+          cp app/build/outputs/apk/debug/app-debug.apk "carrera-rentable-v${VERSION}.apk"
 
       - uses: actions/upload-artifact@v4
         with:
-          name: carrera-rentable-apk
-          path: carrera-rentable/carrera-rentable.apk
+          name: carrera-rentable-v${{ env.VERSION }}
+          path: carrera-rentable/carrera-rentable-v${{ env.VERSION }}.apk
 
-      - name: Publicar en Releases (descarga directa desde el teléfono)
+      # Una release por versión: así quedan guardadas todas las que se construyen.
+      - name: Guardar esta versión
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: carrera-rentable-v${{ env.VERSION }}
+          target_commitish: ${{ github.sha }}
+          name: Carrera Rentable v${{ env.VERSION }}
+          prerelease: true
+          body: "Versión ${{ env.VERSION }} · commit ${{ github.sha }}: ${{ github.event.head_commit.message }}"
+          files: carrera-rentable/carrera-rentable-v${{ env.VERSION }}.apk
+
+      # Enlace fijo que siempre apunta a la última versión.
+      - name: Actualizar "última versión"
         uses: softprops/action-gh-release@v2
         with:
           tag_name: carrera-rentable-ultima
           name: Carrera Rentable (última versión)
           prerelease: true
-          body: "APK generado automáticamente desde el commit ${{ github.sha }}."
+          body: "Última versión: ${{ env.VERSION }} · commit ${{ github.sha }}."
           files: carrera-rentable/carrera-rentable.apk
