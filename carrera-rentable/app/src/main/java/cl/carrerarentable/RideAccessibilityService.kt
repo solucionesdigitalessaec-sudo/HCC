@@ -26,6 +26,11 @@ class RideAccessibilityService : AccessibilityService() {
     private var lastOfferAt = 0L
     private var lastDiagWrite = 0L
 
+    /** Tarifa de la solicitud que muestra el panel. */
+    private var shownPrice: Double? = null
+    /** Tarifa de la solicitud cuyo panel cerró el conductor (no se vuelve a mostrar mientras siga en pantalla). */
+    private var dismissedPrice: Double? = null
+
     /** Raíz de la pantalla obtenida desde el último aviso de la app de conductor. */
     private var eventRoot: AccessibilityNodeInfo? = null
     /** Textos que vienen dentro de los avisos recientes (por si no se puede recorrer la pantalla). */
@@ -34,7 +39,10 @@ class RideAccessibilityService : AccessibilityService() {
 
     override fun onServiceConnected() {
         super.onServiceConnected()
-        overlay = OverlayPanel(this)
+        overlay = OverlayPanel(this) {
+            // El conductor cerró el panel: esa misma solicitud no vuelve a abrirlo.
+            dismissedPrice = shownPrice
+        }
         instance = this
         Diag.serviceConnected(this)
     }
@@ -115,6 +123,8 @@ class RideAccessibilityService : AccessibilityService() {
     private fun handleOffer(offer: cl.carrerarentable.core.RideOffer?, lines: List<String>) {
         val now = SystemClock.elapsedRealtime()
         if (offer == null) {
+            // Si la solicitud cerrada ya no está en pantalla, una nueva con la misma tarifa sí se muestra.
+            if (dismissedPrice != null && now - lastOfferAt > 3000) dismissedPrice = null
             // La solicitud desapareció (aceptada, rechazada o expirada). Por defecto el panel
             // se queda hasta que el conductor lo toque; solo se oculta solo si configuró segundos.
             if (SettingsStore.hideSeconds(this) > 0 && overlay.isShowing && now - lastOfferAt > 2500) {
@@ -125,9 +135,13 @@ class RideAccessibilityService : AccessibilityService() {
         }
 
         lastOfferAt = now
+        // Misma solicitud que el conductor ya cerró: no reabrir el panel.
+        // (Se compara la tarifa porque minutos/km pueden leerse distinto entre capturas.)
+        dismissedPrice?.let { if (kotlin.math.abs(it - offer.price) < 1.0) return else dismissedPrice = null }
         val signature = signatureOf(offer)
         if (signature == lastSignature && overlay.isShowing) return
         lastSignature = signature
+        shownPrice = offer.price
 
         SettingsStore.setLastText(this, OfferParser.normalize(lines).joinToString("\n"))
         val rules = SettingsStore.rules(this)

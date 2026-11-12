@@ -26,11 +26,15 @@ import kotlin.math.abs
  * Panel flotante sobre la app de conductor. Usa una ventana de accesibilidad, así que no
  * necesita el permiso "mostrar sobre otras apps". Tocar = cerrar; arrastrar = moverlo.
  */
-class OverlayPanel(private val service: AccessibilityService) {
+class OverlayPanel(
+    private val service: AccessibilityService,
+    /** Se llama cuando el conductor cierra el panel (o se cierra por tiempo). */
+    private val onDismissed: () -> Unit = {},
+) {
 
     private val wm = service.getSystemService(WindowManager::class.java)
     private val handler = Handler(Looper.getMainLooper())
-    private val hideRunnable = Runnable { hide() }
+    private val hideRunnable = Runnable { hide(); onDismissed() }
     private var view: View? = null
 
     val isShowing get() = view != null
@@ -85,7 +89,7 @@ class OverlayPanel(private val service: AccessibilityService) {
                         runCatching { wm.updateViewLayout(v, lp) }
                     }
                 }
-                MotionEvent.ACTION_UP -> if (moved) SettingsStore.setOverlayY(service, lp.y) else hide()
+                MotionEvent.ACTION_UP -> if (moved) SettingsStore.setOverlayY(service, lp.y) else { hide(); onDismissed() }
             }
             true
         }
