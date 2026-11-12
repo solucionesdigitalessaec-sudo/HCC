@@ -54,6 +54,15 @@ class OverlayPanel(private val service: AccessibilityService) {
         if (hideAfterSeconds > 0) handler.postDelayed(hideRunnable, hideAfterSeconds * 1000L)
     }
 
+    /** Rectángulo en pantalla del panel visible, o null si no se muestra. */
+    fun screenBounds(): android.graphics.Rect? {
+        val v = view ?: return null
+        if (v.width == 0) return null
+        val loc = IntArray(2)
+        v.getLocationOnScreen(loc)
+        return android.graphics.Rect(loc[0], loc[1], loc[0] + v.width, loc[1] + v.height)
+    }
+
     fun hide() {
         handler.removeCallbacks(hideRunnable)
         view?.let { runCatching { wm.removeViewImmediate(it) } }

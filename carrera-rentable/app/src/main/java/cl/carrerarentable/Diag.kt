@@ -27,6 +27,12 @@ object Diag {
     fun rideEvent(c: Context, pkg: String) =
         prefs(c).edit().putString("evento", "$pkg · ${now()}").apply()
 
+    fun ocr(c: Context, status: String, lines: List<String> = emptyList()) {
+        val e = prefs(c).edit().putString("imagen", "${now()} · $status")
+        if (lines.isNotEmpty()) e.putString("texto_imagen", lines.joinToString("\n").take(4000))
+        e.apply()
+    }
+
     fun windows(c: Context, info: String) = prefs(c).edit().putString("ventanas", info).apply()
 
     fun scan(c: Context, windows: Int, texts: List<String>, offerFound: Boolean) =
@@ -43,9 +49,18 @@ object Diag {
             appendLine("Último evento de app de conductor: ${v("evento")}")
             appendLine("Última lectura: ${v("lectura")}")
             appendLine("Pantalla: ${v("ventanas")}")
+            appendLine("Lectura por imagen: ${v("imagen")}")
             appendLine("Apps vistas: ${p.getString("paquetes", "").orEmpty().ifBlank { "ninguna" }.replace(",", ", ")}")
         }.trim()
     }
 
-    fun lastText(c: Context) = prefs(c).getString("texto", "").orEmpty()
+    fun lastText(c: Context): String {
+        val p = prefs(c)
+        val img = p.getString("texto_imagen", "").orEmpty()
+        val txt = p.getString("texto", "").orEmpty()
+        return listOf(
+            if (img.isNotBlank()) "[imagen]\n$img" else "",
+            if (txt.isNotBlank()) "[accesibilidad]\n$txt" else "",
+        ).filter { it.isNotBlank() }.joinToString("\n\n")
+    }
 }

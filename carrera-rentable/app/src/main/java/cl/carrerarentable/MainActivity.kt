@@ -37,6 +37,8 @@ class MainActivity : Activity() {
     private lateinit var tMin: EditText
     private lateinit var tResult: TextView
     private lateinit var diag: TextView
+    private lateinit var shiftStatus: TextView
+    private lateinit var shiftButton: Button
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -63,6 +65,25 @@ class MainActivity : Activity() {
         col.addView(button("Abrir info de la app (ajustes restringidos)") {
             startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, android.net.Uri.parse("package:$packageName")))
         })
+
+        // Turno: lectura por imagen
+        col.addView(title("Turno (Uber y DiDi)"))
+        col.addView(note(
+            "Uber y DiDi esconden su texto, así que se lee la pantalla como imagen. Al empezar, Android " +
+                "pregunta si permites grabar la pantalla: elige \"Pantalla completa\" y acepta. " +
+                "Necesita también la lectura de arriba activada (es la que dibuja el panel)."
+        ))
+        shiftStatus = TextView(this).apply { textSize = 16f; typeface = Typeface.DEFAULT_BOLD }
+        col.addView(shiftStatus)
+        shiftButton = button("") {
+            if (ShiftService.running) {
+                ShiftService.stop(this)
+                it.postDelayed({ refreshShift() }, 500)
+            } else {
+                startShift()
+            }
+        }
+        col.addView(shiftButton)
 
         // 2. Reglas
         col.addView(title("2. Mis reglas"))
@@ -126,11 +147,59 @@ class MainActivity : Activity() {
             status.setTextColor(Color.parseColor("#D97706"))
         }
         diag.text = Diag.report(this)
+        refreshShift()
     }
 
     override fun onPause() {
         saveRules()
         super.onPause()
+    }
+
+    private fun refreshShift() {
+        val on = ShiftService.running
+        shiftStatus.text = if (on) "● Turno ACTIVO (leyendo la pantalla)" else "● Turno detenido"
+        shiftStatus.setTextColor(Color.parseColor(if (on) "#16A34A" else "#6B7280"))
+        shiftButton.text = if (on) "■ Terminar turno" else "▶ Empezar turno"
+    }
+
+    private fun startShift() {
+        if (RideAccessibilityService.instance == null) {
+            Toast.makeText(this, "Primero activa KMRentable en Accesibilidad (paso 1)", Toast.LENGTH_LONG).show()
+            return
+        }
+        if (android.os.Build.VERSION.SDK_INT >= 33 &&
+            checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS) != android.content.pm.PackageManager.PERMISSION_GRANTED
+        ) {
+            requestPermissions(arrayOf(android.Manifest.permission.POST_NOTIFICATIONS), REQ_NOTIF)
+            return
+        }
+        val mpm = getSystemService(android.media.projection.MediaProjectionManager::class.java)
+        @Suppress("DEPRECATION")
+        startActivityForResult(mpm.createScreenCaptureIntent(), REQ_CAPTURE)
+    }
+
+    override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        // Con o sin permiso de notificaciones, el turno puede funcionar.
+        if (requestCode == REQ_NOTIF) {
+            val mpm = getSystemService(android.media.projection.MediaProjectionManager::class.java)
+            @Suppress("DEPRECATION")
+            startActivityForResult(mpm.createScreenCaptureIntent(), REQ_CAPTURE)
+        }
+    }
+
+    @Deprecated("API de Activity sin AndroidX")
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        @Suppress("DEPRECATION")
+        super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode != REQ_CAPTURE) return
+        if (resultCode != RESULT_OK || data == null) {
+            Toast.makeText(this, "Sin permiso para leer la pantalla, el turno no empezó", Toast.LENGTH_LONG).show()
+            return
+        }
+        ShiftService.start(this, resultCode, data)
+        Toast.makeText(this, "Turno iniciado: abre Uber o DiDi", Toast.LENGTH_SHORT).show()
+        shiftButton.postDelayed({ refreshShift() }, 800)
     }
 
     private fun saveRules() {
@@ -197,4 +266,9 @@ class MainActivity : Activity() {
     }
 
     private fun dp(v: Int) = (v * resources.displayMetrics.density).toInt()
+
+    companion object {
+        private const val REQ_CAPTURE = 41
+        private const val REQ_NOTIF = 42
+    }
 }

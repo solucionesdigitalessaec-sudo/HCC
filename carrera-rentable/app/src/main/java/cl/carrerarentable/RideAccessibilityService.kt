@@ -72,6 +72,23 @@ class RideAccessibilityService : AccessibilityService() {
             Diag.windows(this, describeWindows() + " · " + eventSourceInfo)
         }
         if (lines.isEmpty()) return
+        handleOffer(offer, lines)
+    }
+
+    /**
+     * Texto reconocido en la captura de pantalla (lectura por imagen, ver ShiftService).
+     * Devuelve true si encontró una solicitud.
+     */
+    fun onScreenText(lines: List<String>): Boolean {
+        if (!::overlay.isInitialized) return false
+        val offer = if (lines.isEmpty()) null else OfferParser.parse(lines)
+        handleOffer(offer, lines)
+        return offer != null
+    }
+
+    /** Muestra, actualiza u oculta el panel. Sirve tanto para la lectura de texto como por imagen. */
+    private fun handleOffer(offer: cl.carrerarentable.core.RideOffer?, lines: List<String>) {
+        val now = SystemClock.elapsedRealtime()
         if (offer == null) {
             // La solicitud desapareció (aceptada, rechazada o expirada).
             if (overlay.isShowing && now - lastOfferAt > 2500) {
@@ -93,6 +110,9 @@ class RideAccessibilityService : AccessibilityService() {
         if (SettingsStore.vibrate(this)) buzz(evaluation.profitable)
         if (evaluation.profitable && SettingsStore.sound(this)) Alerts.playProfitable()
     }
+
+    /** Zona de la pantalla que ocupa nuestro panel (para no leerlo en la captura). */
+    fun overlayBounds(): android.graphics.Rect? = if (::overlay.isInitialized) overlay.screenBounds() else null
 
     /** Junta el texto de todas las ventanas que pertenecen a una app de conductor. */
     private fun collectRideAppText(): Pair<Int, List<String>> {

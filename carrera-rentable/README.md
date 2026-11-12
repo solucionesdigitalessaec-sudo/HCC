@@ -25,6 +25,14 @@ Ejemplo (la solicitud de Uber de la captura): $6.980 · 9 min (3,6 km) + 22 min 
 La app **solo lee**: no acepta ni rechaza viajes por ti (hacerlo de forma automática puede
 violar los términos de las plataformas). Nada sale del teléfono; no usa internet.
 
+## Dos formas de leer la solicitud
+
+1. **Texto (accesibilidad):** lee el texto de la pantalla. Es la que dibuja el panel, siempre debe estar activa.
+   Uber y DiDi esconden su texto a este tipo de lectura (Android 14+), así que con ellas no basta.
+2. **Imagen (turno):** en la app toca **▶ Empezar turno** y acepta grabar la **pantalla completa**.
+   Mientras dure el turno se toma una captura cada segundo y se reconoce el texto con ML Kit
+   (sin internet). Aparece el ícono de grabación de Android y una notificación con "Terminar turno".
+
 ## Instalar
 
 1. En GitHub, abre **Releases › KMRentable (última versión)** y descarga `kmrentable.apk`

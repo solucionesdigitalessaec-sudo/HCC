@@ -55,4 +55,6 @@ kotlin {
 
 dependencies {
     implementation(project(":core"))
+    // Reconocimiento de texto en imágenes, modelo incluido en la app (funciona sin internet).
+    implementation("com.google.mlkit:text-recognition:16.0.1")
 }

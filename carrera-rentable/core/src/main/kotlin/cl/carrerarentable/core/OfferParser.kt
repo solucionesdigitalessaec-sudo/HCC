@@ -43,7 +43,8 @@ object OfferParser {
 
     private const val AMOUNT = """(\d{1,3}(?:[.,]\d{3})+|\d+)(?:[.,]\d{1,2}(?!\d))?"""
     private val MONEY_PREFIX = Regex(
-        """(\+\s*)?(?:CLP|\$)\s?$AMOUNT(\s*/\s*(?:km|kms|h|hr|hrs|hora|min))?""", opts
+        // "S" = signo $ mal leído por el reconocimiento de imagen (solo si sigue un monto con miles: "S1.847").
+        """(\+\s*)?(?:CLP|\$|(?<![A-Za-z])S(?=\d{1,3}[.,]\d{3}))\s?$AMOUNT(\s*/\s*(?:km|kms|h|hr|hrs|hora|min))?""", opts
     )
     private val MONEY_SUFFIX = Regex(
         """(?<![\d.,$])(\+\s*)?$AMOUNT\s?(?:CLP|\$)(?!\s*/)""", opts
@@ -51,7 +52,8 @@ object OfferParser {
 
     /** Líneas que contienen montos que NO son la tarifa (propinas incluidas, bonos, ganancias del día...). */
     private val IGNORE_LINE = Regex(
-        """incluid|propina|peaje|bono|promo|ganancia(s)? (de )?hoy|saldo|billetera|semana|today|earnings|wallet""",
+        """incluid|propina|peaje|bono|promo|ganancia(s)? (de )?hoy|saldo|billetera|semana|today|earnings|wallet|""" +
+            """tarifa base|din[aá]mica|gasolina|recargo|descuento""",
         opts,
     )
 
@@ -96,18 +98,23 @@ object OfferParser {
     /**
      * Tarifa = monto válido más cercano ANTES del primer kilometraje (así se evita tomar,
      * por ejemplo, las ganancias del día que se muestran arriba). Si no hay, el más cercano después.
+     * Se prefieren los montos que están solos en su línea ("$1.847") por sobre los desgloses
+     * ("$625 de tarifa base", "$96 de tarifa de gasolina").
      */
     private fun findPrice(text: String, anchor: Int): Double? {
-        data class Cand(val pos: Int, val value: Double)
+        data class Cand(val pos: Int, val value: Double, val alone: Boolean)
 
         fun candidates(re: Regex): List<Cand> = re.findAll(text).mapNotNull { m ->
             if (m.groupValues[1].isNotBlank()) return@mapNotNull null          // "+$400" -> extra, no tarifa
             if (re === MONEY_PREFIX && m.groupValues[3].isNotBlank()) return@mapNotNull null // "$397/km"
-            if (IGNORE_LINE.containsMatchIn(lineAt(text, m.range.first))) return@mapNotNull null
-            Cand(m.range.first, amount(m.groupValues[2]))
+            val line = lineAt(text, m.range.first)
+            if (IGNORE_LINE.containsMatchIn(line)) return@mapNotNull null
+            val rest = line.replace(m.value, "").replace(Regex("""(?i)CLP|est\.?|[\s$.,:]"""), "")
+            Cand(m.range.first, amount(m.groupValues[2]), rest.isEmpty())
         }.toList()
 
-        val cands = candidates(MONEY_PREFIX).ifEmpty { candidates(MONEY_SUFFIX) }
+        val all = candidates(MONEY_PREFIX).ifEmpty { candidates(MONEY_SUFFIX) }
+        val cands = all.filter { it.alone }.ifEmpty { all }
         if (cands.isEmpty()) return null
         val before = cands.filter { it.pos <= anchor }.maxByOrNull { it.pos }
         return (before ?: cands.minByOrNull { it.pos })?.value

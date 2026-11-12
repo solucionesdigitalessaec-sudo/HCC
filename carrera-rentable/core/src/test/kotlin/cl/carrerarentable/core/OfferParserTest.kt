@@ -57,6 +57,30 @@ class OfferParserTest {
     }
 
     @Test
+    fun didiRealScreenshotWithFareBreakdown() {
+        val offer = OfferParser.parse(
+            listOf(
+                "Rechazo permitido", "Toca para aceptar la solicitud.", "Pago con tarjeta", "$1.847",
+                "$625 de tarifa base dinámica", "$96 de tarifa de gasolina",
+                "yeri · 4,91 · 46 viajes", "Tarjeta bancaria verificada",
+                "7 min (3,7 km)", "Avenida Quilín 4931, Macul",
+                "5 min (2,4 km)", "Juvenal Hernández Jaque 4821, Macul",
+            )
+        )
+        assertNotNull(offer)
+        assertEquals(1847.0, offer.price)
+        near(6.1, offer.distanceKm)
+        near(12.0, offer.durationMin)
+    }
+
+    @Test
+    fun ocrMisreadsDollarAsS() {
+        val offer = OfferParser.parse(listOf("S1.847", "7 min (3,7 km)", "5 min (2,4 km)"))
+        assertNotNull(offer)
+        assertEquals(1847.0, offer.price)
+    }
+
+    @Test
     fun didiDotThousandsAndCommaDecimals() {
         val offer = OfferParser.parse(listOf("$5.803", "3,2 km (8 min)", "12,1 km (19 min)", "Aceptar"))
         assertNotNull(offer)
