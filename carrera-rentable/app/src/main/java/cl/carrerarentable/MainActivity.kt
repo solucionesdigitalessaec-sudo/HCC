@@ -91,7 +91,7 @@ class MainActivity : Activity() {
         minKm = field(col, "Mínimo por km ($)", r.minPerKm)
         minHour = field(col, "Mínimo por hora ($) · 0 = no exigir", r.minPerHour)
         costKm = field(col, "Mi costo por km ($, bencina + desgaste) · 0 = no descontar", r.costPerKm)
-        hideSec = field(col, "Ocultar panel después de (segundos) · 0 = nunca", SettingsStore.hideSeconds(this).toDouble())
+        hideSec = field(col, "Ocultar panel solo después de (segundos) · 0 = queda hasta que lo toques", SettingsStore.hideSeconds(this).toDouble())
         vibrate = CheckBox(this).apply {
             text = "Vibrar al llegar una solicitud (1 vibración = rentable, 2 = no)"
             isChecked = SettingsStore.vibrate(this@MainActivity)
@@ -204,7 +204,7 @@ class MainActivity : Activity() {
 
     private fun saveRules() {
         SettingsStore.saveRules(this, Rules(num(minKm) ?: 700.0, num(minHour) ?: 0.0, num(costKm) ?: 0.0))
-        SettingsStore.setHideSeconds(this, (num(hideSec) ?: 20.0).toInt())
+        SettingsStore.setHideSeconds(this, (num(hideSec) ?: 0.0).toInt())
         SettingsStore.setVibrate(this, vibrate.isChecked)
         SettingsStore.setSound(this, sound.isChecked)
     }

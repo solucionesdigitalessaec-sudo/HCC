@@ -115,8 +115,9 @@ class RideAccessibilityService : AccessibilityService() {
     private fun handleOffer(offer: cl.carrerarentable.core.RideOffer?, lines: List<String>) {
         val now = SystemClock.elapsedRealtime()
         if (offer == null) {
-            // La solicitud desapareció (aceptada, rechazada o expirada).
-            if (overlay.isShowing && now - lastOfferAt > 2500) {
+            // La solicitud desapareció (aceptada, rechazada o expirada). Por defecto el panel
+            // se queda hasta que el conductor lo toque; solo se oculta solo si configuró segundos.
+            if (SettingsStore.hideSeconds(this) > 0 && overlay.isShowing && now - lastOfferAt > 2500) {
                 overlay.hide()
                 lastSignature = null
             }

@@ -46,7 +46,7 @@ violar los términos de las plataformas). Nada sale del teléfono; no usa intern
      menú ⋮ › Permitir ajustes restringidos* (botón "Abrir info de la app") y vuelve a activarlo.
 4. Ajusta tus reglas (mínimo $/km, $/h, costo por km) y abre Uber/DiDi/Cabify.
 
-El panel se cierra tocándolo, se mueve arrastrándolo y se oculta solo tras 20 s (configurable).
+El panel se queda en pantalla hasta que lo toques (o hasta que llegue otra solicitud, que lo reemplaza). Se mueve arrastrándolo. Si prefieres que se oculte solo, configura los segundos en la app.
 
 ## Guardar todas las versiones en tu PC
 

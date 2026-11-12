@@ -21,8 +21,9 @@ object SettingsStore {
         .putFloat("costo_km", r.costPerKm.toFloat())
         .apply()
 
-    fun hideSeconds(c: Context) = prefs(c).getInt("ocultar_seg", 20)
-    fun setHideSeconds(c: Context, s: Int) = prefs(c).edit().putInt("ocultar_seg", s).apply()
+    /** Segundos antes de ocultar el panel solo. 0 (por defecto) = queda hasta que lo toques. */
+    fun hideSeconds(c: Context) = prefs(c).getInt("ocultar_seg_v2", 0)
+    fun setHideSeconds(c: Context, s: Int) = prefs(c).edit().putInt("ocultar_seg_v2", s).apply()
 
     fun vibrate(c: Context) = prefs(c).getBoolean("vibrar", true)
     fun setVibrate(c: Context, v: Boolean) = prefs(c).edit().putBoolean("vibrar", v).apply()
