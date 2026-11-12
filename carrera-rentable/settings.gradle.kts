@@ -11,5 +11,5 @@ dependencyResolutionManagement {
         mavenCentral()
     }
 }
-rootProject.name = "CarreraRentable"
+rootProject.name = "KMRentable"
 include(":core", ":app")

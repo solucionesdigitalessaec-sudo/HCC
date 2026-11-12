@@ -2,7 +2,7 @@
 # Uso (PowerShell):  powershell -ExecutionPolicy Bypass -File descargar-apks.ps1
 # Puedes volver a ejecutarlo cuando quieras: solo baja las versiones nuevas.
 param(
-    [string]$Carpeta = (Join-Path ([Environment]::GetFolderPath("MyDocuments")) "CarreraRentable")
+    [string]$Carpeta = (Join-Path ([Environment]::GetFolderPath("MyDocuments")) "KMRentable")
 )
 
 $apk = Join-Path $Carpeta "APK"
@@ -12,7 +12,7 @@ $releases = Invoke-RestMethod "https://api.github.com/repos/solucionesdigitaless
 $nuevas = 0
 foreach ($r in $releases) {
     foreach ($a in $r.assets) {
-        if ($a.name -notmatch '^carrera-rentable-v[\d.]+\.apk$') { continue }
+        if ($a.name -notmatch '^(kmrentable|carrera-rentable)-v[\d.]+\.apk$') { continue }
         $destino = Join-Path $apk $a.name
         if (Test-Path $destino) { continue }
         Write-Host "Descargando $($a.name)..."

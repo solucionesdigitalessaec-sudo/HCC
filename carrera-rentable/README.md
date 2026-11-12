@@ -1,4 +1,4 @@
-# Carrera Rentable · app Android para conductores
+# KMRentable · app Android para conductores
 
 Cuando te llega una solicitud en **Uber Driver, DiDi Conductor o Cabify Driver**, la app lee la
 tarifa, los kilómetros y los minutos de la pantalla y muestra un panel flotante con:
@@ -27,11 +27,14 @@ violar los términos de las plataformas). Nada sale del teléfono; no usa intern
 
 ## Instalar
 
-1. En GitHub, abre **Releases › Carrera Rentable (última versión)** y descarga `carrera-rentable.apk`
-   desde el teléfono (o en **Actions › APK Carrera Rentable ›** última ejecución › *Artifacts*).
+1. En GitHub, abre **Releases › KMRentable (última versión)** y descarga `kmrentable.apk`
+   desde el teléfono (o en **Actions › APK KMRentable ›** última ejecución › *Artifacts*).
 2. Ábrelo y permite "instalar apps de origen desconocido".
-3. Abre **Carrera Rentable** › *Abrir ajustes de accesibilidad* › activa **Carrera Rentable**.
-   - En Android 13+ puede salir **"Ajuste restringido"**. Ve a *Ajustes › Apps › Carrera Rentable ›
+   - Si **Google Play Protect** dice "Se bloqueó la app": Play Store › tu foto › Play Protect › ⚙️ ›
+     apaga *Analizar apps con Play Protect*, instala y vuelve a encenderlo. Pasa porque la app usa
+     el servicio de accesibilidad para leer la pantalla.
+3. Abre **KMRentable** › *Abrir ajustes de accesibilidad* › activa **KMRentable**.
+   - En Android 13+ puede salir **"Ajuste restringido"**. Ve a *Ajustes › Apps › KMRentable ›
      menú ⋮ › Permitir ajustes restringidos* (botón "Abrir info de la app") y vuelve a activarlo.
 4. Ajusta tus reglas (mínimo $/km, $/h, costo por km) y abre Uber/DiDi/Cabify.
 
@@ -48,7 +51,7 @@ Para tenerlas todas en tu PC, en PowerShell, dentro de esta carpeta:
 powershell -ExecutionPolicy Bypass -File descargar-apks.ps1
 ```
 
-Crea `Documentos\CarreraRentable\APK` y baja ahí cada versión (`carrera-rentable-v1.4.apk`, ...).
+Crea `Documentos\KMRentable\APK` y baja ahí cada versión (`kmrentable-v1.6.apk`, ...).
 Si lo vuelves a ejecutar, solo baja las nuevas.
 
 ## Si una solicitud no se detecta bien

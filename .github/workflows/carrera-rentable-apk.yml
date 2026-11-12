@@ -1,4 +1,4 @@
-name: APK Carrera Rentable
+name: APK KMRentable
 
 on:
   push:
@@ -35,31 +35,31 @@ jobs:
 
       - name: Nombrar APK con su versión
         run: |
-          cp app/build/outputs/apk/debug/app-debug.apk carrera-rentable.apk
-          cp app/build/outputs/apk/debug/app-debug.apk "carrera-rentable-v${VERSION}.apk"
+          cp app/build/outputs/apk/debug/app-debug.apk kmrentable.apk
+          cp app/build/outputs/apk/debug/app-debug.apk "kmrentable-v${VERSION}.apk"
 
       - uses: actions/upload-artifact@v4
         with:
-          name: carrera-rentable-v${{ env.VERSION }}
-          path: carrera-rentable/carrera-rentable-v${{ env.VERSION }}.apk
+          name: kmrentable-v${{ env.VERSION }}
+          path: carrera-rentable/kmrentable-v${{ env.VERSION }}.apk
 
       # Una release por versión: así quedan guardadas todas las que se construyen.
       - name: Guardar esta versión
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: carrera-rentable-v${{ env.VERSION }}
+          tag_name: kmrentable-v${{ env.VERSION }}
           target_commitish: ${{ github.sha }}
-          name: Carrera Rentable v${{ env.VERSION }}
+          name: KMRentable v${{ env.VERSION }}
           prerelease: true
           body: "Versión ${{ env.VERSION }} · commit ${{ github.sha }}: ${{ github.event.head_commit.message }}"
-          files: carrera-rentable/carrera-rentable-v${{ env.VERSION }}.apk
+          files: carrera-rentable/kmrentable-v${{ env.VERSION }}.apk
 
       # Enlace fijo que siempre apunta a la última versión.
       - name: Actualizar "última versión"
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: carrera-rentable-ultima
-          name: Carrera Rentable (última versión)
+          tag_name: kmrentable-ultima
+          name: KMRentable (última versión)
           prerelease: true
           body: "Última versión: ${{ env.VERSION }} · commit ${{ github.sha }}."
-          files: carrera-rentable/carrera-rentable.apk
+          files: carrera-rentable/kmrentable.apk

@@ -53,8 +53,8 @@ class MainActivity : Activity() {
         status = TextView(this).apply { textSize = 16f; typeface = Typeface.DEFAULT_BOLD }
         col.addView(status)
         col.addView(note(
-            "Activa \"Carrera Rentable\" en Ajustes › Accesibilidad. Si aparece como \"Ajuste restringido\": " +
-                "Ajustes › Apps › Carrera Rentable › menú ⋮ › \"Permitir ajustes restringidos\", y vuelve a intentarlo."
+            "Activa \"KMRentable\" en Ajustes › Accesibilidad. Si aparece como \"Ajuste restringido\": " +
+                "Ajustes › Apps › KMRentable › menú ⋮ › \"Permitir ajustes restringidos\", y vuelve a intentarlo."
         ))
         col.addView(button("Abrir ajustes de accesibilidad") {
             startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
