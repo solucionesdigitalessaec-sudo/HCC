@@ -39,18 +39,21 @@ import com.google.mlkit.vision.text.latin.TextRecognizerOptions
 class ShiftService : Service() {
 
     private val handler = Handler(Looper.getMainLooper())
+    /** Las capturas se convierten en un hilo aparte para no congelar la app. */
+    private val worker = android.os.HandlerThread("kmrentable-captura").apply { start() }
+    private val workerHandler = Handler(worker.looper)
     private var projection: MediaProjection? = null
     private var display: VirtualDisplay? = null
     private var reader: ImageReader? = null
     private var recognizer: TextRecognizer? = null
-    private var busy = false
+    @Volatile private var busy = false
     private var scale = 1f
     private var lastDiag = 0L
 
     private val tick = object : Runnable {
         override fun run() {
             captureOnce()
-            handler.postDelayed(this, INTERVAL_MS)
+            workerHandler.postDelayed(this, INTERVAL_MS)
         }
     }
 
@@ -91,7 +94,7 @@ class ShiftService : Service() {
         startCapture(mp)
         running = true
         Diag.ocr(this, "Turno iniciado")
-        handler.postDelayed(tick, 800)
+        workerHandler.postDelayed(tick, 800)
         return START_NOT_STICKY
     }
 
@@ -105,7 +108,7 @@ class ShiftService : Service() {
         reader = r
         display = mp.createVirtualDisplay(
             "KMRentable", cw, ch, dpi,
-            DisplayManager.VIRTUAL_DISPLAY_FLAG_AUTO_MIRROR, r.surface, null, handler,
+            DisplayManager.VIRTUAL_DISPLAY_FLAG_AUTO_MIRROR, r.surface, null, workerHandler,
         )
         recognizer = TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS)
     }
@@ -205,6 +208,8 @@ class ShiftService : Service() {
     override fun onDestroy() {
         running = false
         handler.removeCallbacksAndMessages(null)
+        workerHandler.removeCallbacksAndMessages(null)
+        worker.quitSafely()
         runCatching { display?.release() }
         runCatching { reader?.close() }
         runCatching { recognizer?.close() }

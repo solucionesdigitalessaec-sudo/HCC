@@ -18,8 +18,13 @@ import cl.carrerarentable.core.ProfitCalculator
 class RideAccessibilityService : AccessibilityService() {
 
     private val handler = Handler(Looper.getMainLooper())
+    /** Hilo aparte para recorrer la pantalla de Uber/DiDi: si se hace en el principal, Android muestra "no responde". */
+    private val worker = android.os.HandlerThread("kmrentable-lector").apply { start() }
+    private val workerHandler = Handler(worker.looper)
     private lateinit var overlay: OverlayPanel
     private val scan = Runnable { scanNow() }
+    @Volatile private var lastSource: AccessibilityNodeInfo? = null
+    private var lastRideDiag = 0L
 
     private var lastSignature: String? = null
     private var lastOfferAt = 0L
@@ -31,10 +36,10 @@ class RideAccessibilityService : AccessibilityService() {
     private var dismissedPrice: Double? = null
 
     /** Raíz de la pantalla obtenida desde el último aviso de la app de conductor. */
-    private var eventRoot: AccessibilityNodeInfo? = null
+    @Volatile private var eventRoot: AccessibilityNodeInfo? = null
     /** Textos que vienen dentro de los avisos recientes (por si no se puede recorrer la pantalla). */
     private val eventTexts = LinkedHashMap<String, Long>()
-    private var eventSourceInfo = "sin datos"
+    @Volatile private var eventSourceInfo = "sin datos"
 
     override fun onServiceConnected() {
         super.onServiceConnected()
@@ -50,26 +55,34 @@ class RideAccessibilityService : AccessibilityService() {
         val pkg = event?.packageName?.toString() ?: return
         Diag.eventFrom(this, pkg)
         if (!RideApps.isRideApp(pkg)) return
-        Diag.rideEvent(this, pkg)
-
         val now = SystemClock.elapsedRealtime()
-        (event.text.orEmpty() + listOfNotNull(event.contentDescription)).forEach { t ->
-            t?.toString()?.takeIf { it.isNotBlank() }?.let { eventTexts[it] = now }
+        if (now - lastRideDiag > 2000) {
+            lastRideDiag = now
+            Diag.rideEvent(this, pkg)
         }
-        eventTexts.entries.removeAll { now - it.value > 4000 }
-        while (eventTexts.size > 200) eventTexts.remove(eventTexts.keys.first())
+
+        synchronized(eventTexts) {
+            (event.text.orEmpty() + listOfNotNull(event.contentDescription)).forEach { t ->
+                t?.toString()?.takeIf { it.isNotBlank() }?.let { eventTexts[it] = now }
+            }
+            eventTexts.entries.removeAll { now - it.value > 4000 }
+            while (eventTexts.size > 200) eventTexts.remove(eventTexts.keys.first())
+        }
 
         val source = runCatching { event.source }.getOrNull()
         eventSourceInfo = if (source == null) "aviso sin contenido (source=null)" else "aviso con contenido"
-        source?.let { eventRoot = topOf(it) }
+        if (source != null) lastSource = source
 
-        // Las apps lanzan muchos eventos seguidos: se agrupan y se lee la pantalla una sola vez.
-        handler.removeCallbacks(scan)
-        handler.postDelayed(scan, 250)
+        // Las apps lanzan muchos eventos seguidos: se agrupan y se lee la pantalla una sola vez,
+        // en el hilo aparte.
+        workerHandler.removeCallbacks(scan)
+        workerHandler.postDelayed(scan, 300)
     }
 
+    /** Corre en el hilo aparte. El panel se actualiza en el hilo principal. */
     private fun scanNow() {
         if (!::overlay.isInitialized) return
+        lastSource?.let { src -> eventRoot = topOf(src); lastSource = null }
         val (windowCount, lines) = collectRideAppText()
         val offer = if (lines.isEmpty()) null else OfferParser.parseRequest(lines)
         val now = SystemClock.elapsedRealtime()
@@ -80,7 +93,7 @@ class RideAccessibilityService : AccessibilityService() {
             Diag.windows(this, describeWindows() + " · " + eventSourceInfo)
         }
         if (lines.isEmpty()) return
-        handleOffer(offer, lines)
+        handler.post { handleOffer(offer, lines) }
     }
 
     /** Solicitud leída por imagen que todavía no se confirma (debe repetirse en la captura siguiente). */
@@ -171,7 +184,7 @@ class RideAccessibilityService : AccessibilityService() {
             walk(root, out, 0)
         }
         // Respaldo: el texto que venía dentro de los avisos.
-        if (out.isEmpty()) out += eventTexts.keys
+        if (out.isEmpty()) synchronized(eventTexts) { out += eventTexts.keys }
         return count to out
     }
 
@@ -227,6 +240,8 @@ class RideAccessibilityService : AccessibilityService() {
     override fun onDestroy() {
         if (instance === this) instance = null
         handler.removeCallbacksAndMessages(null)
+        workerHandler.removeCallbacksAndMessages(null)
+        worker.quitSafely()
         if (::overlay.isInitialized) overlay.hide()
         super.onDestroy()
     }

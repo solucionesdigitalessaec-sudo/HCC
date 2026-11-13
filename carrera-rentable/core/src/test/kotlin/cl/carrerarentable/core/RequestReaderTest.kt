@@ -96,4 +96,44 @@ class RequestReaderTest {
         // Si el conductor apaga "solo tarjeta", sí es rentable.
         assertTrue(ProfitCalculator.evaluate(o, Rules(minPerKm = 600.0, cardOnly = false)).profitable)
     }
+
+    @Test
+    fun realOcrTextWithLettersInsteadOfOnes() {
+        // Texto real reconocido por imagen en el turno (Uber, 13/11).
+        val ocr = """
+            86
+            Recoleta
+            Providencia
+            2 UberX Exclusivo
+            X
+            CLP6,117
+            B
+            CLP416/km est.
+            9 +CLPl,750.00 incluido
+            6 min• 2.l km
+            Avenida Vitacura, Vitacura
+            Tarjeta de crédito verifica...
+            * 4.96
+            Pago con tarjeta
+            Catalina
+            19 min 12.6 km
+            Municipalidad de Quinta
+            Normal, Quinta Normal
+            Aceptar
+        """.trimIndent().lines()
+        val o = OfferParser.parseRequest(ocr)
+        assertNotNull(o)
+        assertEquals(6117.0, o.price)
+        assertTrue(kotlin.math.abs(o.distanceKm - 14.7) < 0.01, "km = ${o.distanceKm}")
+        assertTrue(kotlin.math.abs(o.durationMin!! - 25.0) < 0.01)
+        assertEquals(Payment.CARD, o.payment)
+    }
+
+    @Test
+    fun ocrDigitFixDoesNotTouchWords() {
+        assertEquals("Calle Lo Ovalle 12 km", OfferParser.fixOcrDigits("Calle Lo Ovalle 12 km"))
+        assertEquals("6 min• 2.1 km", OfferParser.fixOcrDigits("6 min• 2.l km"))
+        assertEquals("+CLP1,750.00 incluido", OfferParser.fixOcrDigits("+CLPl,750.00 incluido"))
+        assertEquals("1O min (3,O km)".let { OfferParser.fixOcrDigits(it) }, "10 min (3,0 km)")
+    }
 }

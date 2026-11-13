@@ -178,7 +178,26 @@ object OfferParser {
      * (Android suele repetir el texto de los hijos en la descripción del contenedor).
      */
     fun normalize(lines: List<String>): List<String> {
-        val clean = lines.map { it.replace(' ', ' ').trim() }.filter { it.isNotEmpty() }.distinct()
+        val clean = lines.map { fixOcrDigits(it.replace('\u00A0', ' ').trim()) }.filter { it.isNotEmpty() }.distinct()
         return clean.filter { line -> clean.none { other -> other !== line && other.length > line.length && other.contains(line) } }
+    }
+
+    // El reconocimiento de imagen confunde 1 con l / I / | y 0 con O dentro de los números:
+    // "2.l km" -> "2.1 km", "+CLPl,750.00" -> "+CLP1,750.00".
+    private val OCR_NUM = """([0-9lIO|][0-9lIO|.,]*)"""
+    private val OCR_BEFORE_UNIT = Regex("""(?<![A-Za-z])$OCR_NUM(?=\s*(?i:km|kms|min|mins)\b)""")
+    private val OCR_AFTER_MONEY = Regex("""(CLP|\$)(\s?)$OCR_NUM""")
+
+    private fun digits(s: String) = s.replace('l', '1').replace('I', '1').replace('|', '1').replace('O', '0')
+
+    fun fixOcrDigits(line: String): String {
+        var s = OCR_BEFORE_UNIT.replace(line) { m ->
+            if (m.value.any { it.isDigit() } || m.value.length == 1) digits(m.value) else m.value
+        }
+        s = OCR_AFTER_MONEY.replace(s) { m ->
+            val n = m.groupValues[3]
+            m.groupValues[1] + m.groupValues[2] + (if (n.any { it.isDigit() }) digits(n) else n)
+        }
+        return s
     }
 }

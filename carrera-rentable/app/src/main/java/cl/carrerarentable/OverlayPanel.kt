@@ -55,23 +55,29 @@ class OverlayPanel(
         }
         val v = build(ev, rules)
         attachDrag(v, lp)
-        runCatching { wm.addView(v, lp) }.onSuccess { view = v }
+        runCatching { wm.addView(v, lp) }.onSuccess { view = v; updateBounds(v) }
         if (hideAfterSeconds > 0) handler.postDelayed(hideRunnable, hideAfterSeconds * 1000L)
     }
 
-    /** Rectángulo en pantalla del panel visible, o null si no se muestra. */
-    fun screenBounds(): android.graphics.Rect? {
-        val v = view ?: return null
-        if (v.width == 0) return null
-        val loc = IntArray(2)
-        v.getLocationOnScreen(loc)
-        return android.graphics.Rect(loc[0], loc[1], loc[0] + v.width, loc[1] + v.height)
+    /** Rectángulo en pantalla del panel visible (se puede leer desde otro hilo), o null si no se muestra. */
+    @Volatile private var bounds: android.graphics.Rect? = null
+
+    fun screenBounds(): android.graphics.Rect? = bounds
+
+    private fun updateBounds(v: View) {
+        v.post {
+            if (view !== v || v.width == 0) return@post
+            val loc = IntArray(2)
+            v.getLocationOnScreen(loc)
+            bounds = android.graphics.Rect(loc[0], loc[1], loc[0] + v.width, loc[1] + v.height)
+        }
     }
 
     fun hide() {
         handler.removeCallbacks(hideRunnable)
         view?.let { runCatching { wm.removeViewImmediate(it) } }
         view = null
+        bounds = null
     }
 
     @SuppressLint("ClickableViewAccessibility")
@@ -88,6 +94,7 @@ class OverlayPanel(
                     if (moved) {
                         lp.y = (startLp + dy).coerceAtLeast(0)
                         runCatching { wm.updateViewLayout(v, lp) }
+                        updateBounds(v)
                     }
                 }
                 MotionEvent.ACTION_UP -> if (moved) SettingsStore.setOverlayY(service, lp.y) else { hide(); onDismissed() }
