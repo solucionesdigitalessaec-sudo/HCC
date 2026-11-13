@@ -62,6 +62,12 @@ class ScreenFilterTest {
     }
 
     @Test
+    fun settingsTextDoesNotDiscardTheCapture() {
+        val lines = listOf(l("Mínimo por hora ($) · 0 = no exigir", 100), l("Desliza para conectarte", 900), l("KMRentable", 50))
+        assertEquals(3, ScreenFilter.removeOwnPanel(lines)?.size)
+    }
+
+    @Test
     fun acceptButtonIsRequired() {
         assertTrue(ScreenFilter.hasAcceptButton(listOf("$1.847", "Toca para aceptar la solicitud.")))
         assertTrue(ScreenFilter.hasAcceptButton(listOf("Aceptar")))

@@ -68,9 +68,9 @@ class MainActivity : Activity() {
         })
 
         // Turno: lectura por imagen
-        col.addView(title("Turno (Uber y DiDi)"))
+        col.addView(title("Turno (Uber, DiDi y Cabify)"))
         col.addView(note(
-            "Uber y DiDi esconden su texto, así que se lee la pantalla como imagen. Al empezar, Android " +
+            "Uber y DiDi esconden su texto, así que se lee la pantalla como imagen (también sirve con Cabify). Al empezar, Android " +
                 "pregunta si permites grabar la pantalla: elige \"Pantalla completa\" y acepta. " +
                 "Necesita también la lectura de arriba activada (es la que dibuja el panel)."
         ))
@@ -93,7 +93,7 @@ class MainActivity : Activity() {
         minHour = field(col, "Mínimo por hora ($) · 0 = no exigir", r.minPerHour)
         costKm = field(col, "Mi costo por km ($, bencina + desgaste) · 0 = no descontar", r.costPerKm)
         cardOnly = CheckBox(this).apply {
-            text = "Solo carreras con tarjeta (efectivo = NO RENTABLE)"
+            text = "Solo carreras con tarjeta (efectivo = NO RENTABLE). En Cabify no se exige: ahí desactivas el efectivo."
             isChecked = r.cardOnly
         }
         col.addView(cardOnly)

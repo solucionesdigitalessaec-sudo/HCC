@@ -8,11 +8,12 @@ object ScreenFilter {
 
     private val PANEL_TOP = Regex("""\bRENTABLE\b""", RegexOption.IGNORE_CASE)
     private val PANEL_BOTTOM = Regex("""toca para cerrar|arrastra para mover""", RegexOption.IGNORE_CASE)
-    /** Textos que solo existen en nuestro panel. Si quedan después de filtrar, la captura no sirve. */
-    private val PANEL_ANY = Regex(
-        """\bRENTABLE\b|KM A MANEJAR|POR HORA|toca para cerrar|arrastra para mover|para llegar a|m[ií]nimo \$""",
-        RegexOption.IGNORE_CASE,
-    )
+    /**
+     * Textos que solo existen en nuestro panel (en MAYÚSCULAS, como se dibujan). Si quedan después
+     * de filtrar, la captura no sirve. Se distingue mayúscula/minúscula para no confundirlos con
+     * textos de otras pantallas ("Mínimo por hora" en los ajustes, "$X por hora" en Cabify...).
+     */
+    private val PANEL_ANY = Regex("""\bRENTABLE\b|KM A MANEJAR|POR HORA|toca para cerrar|arrastra para mover""")
 
     /** Botón o aviso para aceptar: solo hay una solicitud real si aparece en pantalla. */
     private val ACCEPT = Regex("""\bacept(ar|a)\b|toca para aceptar|desliza para aceptar|\baccept\b""", RegexOption.IGNORE_CASE)

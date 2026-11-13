@@ -9,6 +9,7 @@ import android.os.Vibrator
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
 import cl.carrerarentable.core.OfferParser
+import cl.carrerarentable.core.Payment
 import cl.carrerarentable.core.ProfitCalculator
 
 /**
@@ -25,6 +26,8 @@ class RideAccessibilityService : AccessibilityService() {
     private val scan = Runnable { scanNow() }
     @Volatile private var lastSource: AccessibilityNodeInfo? = null
     private var lastRideDiag = 0L
+    /** Última app de conductor que tuvo actividad en pantalla (com.cabify.driver, com.ubercab.driver...). */
+    @Volatile private var currentRideApp: String? = null
 
     private var lastSignature: String? = null
     private var lastOfferAt = 0L
@@ -55,6 +58,7 @@ class RideAccessibilityService : AccessibilityService() {
         val pkg = event?.packageName?.toString() ?: return
         Diag.eventFrom(this, pkg)
         if (!RideApps.isRideApp(pkg)) return
+        currentRideApp = pkg
         val now = SystemClock.elapsedRealtime()
         if (now - lastRideDiag > 2000) {
             lastRideDiag = now
@@ -156,7 +160,11 @@ class RideAccessibilityService : AccessibilityService() {
 
         SettingsStore.setLastText(this, OfferParser.normalize(lines).joinToString("\n"))
         val rules = SettingsStore.rules(this)
-        val evaluation = ProfitCalculator.evaluate(offer, rules)
+        // En Cabify el conductor desactiva el efectivo: si la solicitud no dice la forma de pago,
+        // se considera tarjeta (solo "efectivo" escrito explícitamente cuenta como efectivo).
+        val adjusted = if (currentRideApp?.contains("cabify") == true && offer.payment == Payment.UNKNOWN)
+            offer.copy(payment = Payment.CARD) else offer
+        val evaluation = ProfitCalculator.evaluate(adjusted, rules)
         overlay.show(evaluation, rules, SettingsStore.hideSeconds(this))
         if (SettingsStore.vibrate(this)) buzz(evaluation.profitable)
         if (evaluation.profitable && SettingsStore.sound(this)) Alerts.playProfitable()
