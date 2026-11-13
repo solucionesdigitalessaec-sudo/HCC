@@ -19,6 +19,7 @@ import android.widget.LinearLayout
 import android.widget.TextView
 import cl.carrerarentable.core.Evaluation
 import cl.carrerarentable.core.Money
+import cl.carrerarentable.core.Payment
 import cl.carrerarentable.core.Rules
 import kotlin.math.abs
 
@@ -132,9 +133,16 @@ class OverlayPanel(
             }
             includeFontPadding = false
         })
-        val sub = if (ev.perKmOk) "mínimo ${Money.clp(rules.minPerKm)}/km"
-        else "faltan ${Money.clp(rules.minPerKm * o.distanceKm - o.price)} para llegar a ${Money.clp(rules.minPerKm)}/km"
-        header.addView(text(sub, 14f, white).apply { alpha = 0.92f })
+        if (!ev.paymentOk) {
+            // Solo tarjeta: el motivo va en grande, debajo del $/km.
+            val why = if (o.payment == Payment.CASH) "💵 PAGO EN EFECTIVO" else "⚠️ NO SE VE PAGO CON TARJETA"
+            header.addView(text(why, 18f, white, bold = true).apply { maxLines = 1 })
+        } else {
+            val pay = if (o.payment == Payment.CARD) "💳 Tarjeta · " else ""
+            val sub = if (ev.perKmOk) "${pay}mínimo ${Money.clp(rules.minPerKm)}/km"
+            else "${pay}faltan ${Money.clp(rules.minPerKm * o.distanceKm - o.price)} para llegar a ${Money.clp(rules.minPerKm)}/km"
+            header.addView(text(sub, 14f, white).apply { alpha = 0.92f; maxLines = 1 })
+        }
         root.addView(header)
 
         // 2. Cuatro cuadros con los datos de la carrera

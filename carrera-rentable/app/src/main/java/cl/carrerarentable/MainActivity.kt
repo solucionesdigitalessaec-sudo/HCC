@@ -31,6 +31,7 @@ class MainActivity : Activity() {
     private lateinit var costKm: EditText
     private lateinit var hideSec: EditText
     private lateinit var vibrate: CheckBox
+    private lateinit var cardOnly: CheckBox
     private lateinit var sound: CheckBox
     private lateinit var tPrice: EditText
     private lateinit var tKm: EditText
@@ -91,6 +92,11 @@ class MainActivity : Activity() {
         minKm = field(col, "Mínimo por km ($)", r.minPerKm)
         minHour = field(col, "Mínimo por hora ($) · 0 = no exigir", r.minPerHour)
         costKm = field(col, "Mi costo por km ($, bencina + desgaste) · 0 = no descontar", r.costPerKm)
+        cardOnly = CheckBox(this).apply {
+            text = "Solo carreras con tarjeta (efectivo = NO RENTABLE)"
+            isChecked = r.cardOnly
+        }
+        col.addView(cardOnly)
         hideSec = field(col, "Ocultar panel solo después de (segundos) · 0 = queda hasta que lo toques", SettingsStore.hideSeconds(this).toDouble())
         vibrate = CheckBox(this).apply {
             text = "Vibrar al llegar una solicitud (1 vibración = rentable, 2 = no)"
@@ -203,7 +209,7 @@ class MainActivity : Activity() {
     }
 
     private fun saveRules() {
-        SettingsStore.saveRules(this, Rules(num(minKm) ?: 700.0, num(minHour) ?: 0.0, num(costKm) ?: 0.0))
+        SettingsStore.saveRules(this, Rules(num(minKm) ?: 700.0, num(minHour) ?: 0.0, num(costKm) ?: 0.0, cardOnly.isChecked))
         SettingsStore.setHideSeconds(this, (num(hideSec) ?: 0.0).toInt())
         SettingsStore.setVibrate(this, vibrate.isChecked)
         SettingsStore.setSound(this, sound.isChecked)
@@ -218,7 +224,9 @@ class MainActivity : Activity() {
         }
         saveRules()
         val rules = SettingsStore.rules(this)
-        val ev = ProfitCalculator.evaluate(RideOffer(price, km, num(tMin)?.takeIf { it > 0 }), rules)
+        val ev = ProfitCalculator.evaluate(
+            RideOffer(price, km, num(tMin)?.takeIf { it > 0 }, payment = cl.carrerarentable.core.Payment.CARD), rules,
+        )
         tResult.setTextColor(Color.parseColor(if (ev.profitable) "#16A34A" else "#DC2626"))
         tResult.text = buildString {
             appendLine(if (ev.profitable) "✅ RENTABLE" else "❌ NO RENTABLE")

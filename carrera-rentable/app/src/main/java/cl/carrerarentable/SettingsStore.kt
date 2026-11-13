@@ -13,12 +13,14 @@ object SettingsStore {
         minPerKm = prefs(c).getFloat("min_km", 700f).toDouble(),
         minPerHour = prefs(c).getFloat("min_hora", 0f).toDouble(),
         costPerKm = prefs(c).getFloat("costo_km", 0f).toDouble(),
+        cardOnly = prefs(c).getBoolean("solo_tarjeta", true),
     )
 
     fun saveRules(c: Context, r: Rules) = prefs(c).edit()
         .putFloat("min_km", r.minPerKm.toFloat())
         .putFloat("min_hora", r.minPerHour.toFloat())
         .putFloat("costo_km", r.costPerKm.toFloat())
+        .putBoolean("solo_tarjeta", r.cardOnly)
         .apply()
 
     /** Segundos antes de ocultar el panel solo. 0 (por defecto) = queda hasta que lo toques. */

@@ -10,7 +10,6 @@ import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
 import cl.carrerarentable.core.OfferParser
 import cl.carrerarentable.core.ProfitCalculator
-import cl.carrerarentable.core.ScreenFilter
 
 /**
  * Lee el texto visible de Uber / DiDi / Cabify. Cuando aparece una solicitud con tarifa y
@@ -72,7 +71,7 @@ class RideAccessibilityService : AccessibilityService() {
     private fun scanNow() {
         if (!::overlay.isInitialized) return
         val (windowCount, lines) = collectRideAppText()
-        val offer = if (lines.isEmpty()) null else OfferParser.parse(lines)
+        val offer = if (lines.isEmpty()) null else OfferParser.parseRequest(lines)
         val now = SystemClock.elapsedRealtime()
         // Diagnóstico: como máximo una vez por segundo, y siempre que se detecta una oferta.
         if (offer != null || now - lastDiagWrite > 1000) {
@@ -97,8 +96,7 @@ class RideAccessibilityService : AccessibilityService() {
      */
     fun onScreenText(lines: List<String>): Boolean {
         if (!::overlay.isInitialized) return false
-        val offer = if (lines.isEmpty() || !ScreenFilter.hasAcceptButton(lines)) null
-        else OfferParser.parse(lines, requireLegs = true)
+        val offer = if (lines.isEmpty()) null else OfferParser.parseRequest(lines)
         if (offer == null) {
             pendingSignature = null
             handleOffer(null, lines)
@@ -203,7 +201,7 @@ class RideAccessibilityService : AccessibilityService() {
     fun showTestPanel() {
         if (!::overlay.isInitialized) return
         val rules = SettingsStore.rules(this)
-        val offer = OfferParser.parse("CLP9,518\n4 min • 1.6 km\n29 min • 25.0 km") ?: return
+        val offer = OfferParser.parse("CLP9,518\n4 min • 1.6 km\nPago con tarjeta\n29 min • 25.0 km") ?: return
         overlay.show(ProfitCalculator.evaluate(offer, rules), rules, 8)
         if (SettingsStore.vibrate(this)) buzz(false)
     }

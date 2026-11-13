@@ -25,6 +25,18 @@ Ejemplo (la solicitud de Uber de la captura): $6.980 · 9 min (3,6 km) + 22 min 
 La app **solo lee**: no acepta ni rechaza viajes por ti (hacerlo de forma automática puede
 violar los términos de las plataformas). Nada sale del teléfono; no usa internet.
 
+## Qué cuenta como solicitud
+
+Solo se abre el panel con la tarjeta de una solicitud real, que debe traer TODO esto:
+
+1. el botón para aceptar ("Aceptar" / "Toca para aceptar"),
+2. la tarifa arriba ("CLP9,518" en Uber, "$1.847" en DiDi), sola en su línea,
+3. exactamente dos tramos debajo: recogida y destino ("4 min • 1.6 km", "7 min (3,7 km)").
+
+Pantallas de ganancias, de ir a buscar al pasajero, avisos o el mapa no abren el panel.
+Con **"Solo carreras con tarjeta"** (activado por defecto), si la solicitud dice efectivo o no se ve
+"Pago con tarjeta", el panel sale **NO RENTABLE** con el motivo, aunque pague bien por km.
+
 ## Dos formas de leer la solicitud
 
 1. **Texto (accesibilidad):** lee el texto de la pantalla. Es la que dibuja el panel, siempre debe estar activa.

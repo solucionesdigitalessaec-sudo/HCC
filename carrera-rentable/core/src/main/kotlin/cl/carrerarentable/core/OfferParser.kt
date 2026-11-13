@@ -4,11 +4,15 @@ package cl.carrerarentable.core
 data class Leg(val minutes: Double, val km: Double)
 
 /** Solicitud de viaje leída de la pantalla. Distancia y tiempo incluyen recogida + viaje. */
+/** Forma de pago que aparece en la solicitud. */
+enum class Payment { CARD, CASH, UNKNOWN }
+
 data class RideOffer(
     val price: Double,
     val distanceKm: Double,
     val durationMin: Double?,
     val legs: List<Leg> = emptyList(),
+    val payment: Payment = Payment.UNKNOWN,
 )
 
 /**
@@ -64,10 +68,27 @@ object OfferParser {
      * kilómetros sueltos. Se usa con la lectura por imagen, donde el mapa de fondo trae textos
      * con "km" o "min" que no son de la solicitud.
      */
+    private val CASH = Regex("""efectivo|\bcash\b""", opts)
+    private val CARD = Regex("""tarjeta|\bcard\b|cr[eé]dito|d[eé]bito""", opts)
+
+    /**
+     * Lectura ESTRICTA de una solicitud de viaje, como la tarjeta de Uber o DiDi:
+     *  1. botón para aceptar en pantalla ("Aceptar", "Toca para aceptar"),
+     *  2. exactamente dos tramos: recogida y destino ("4 min • 1.6 km", "7 min (3,7 km)"),
+     *  3. la tarifa ("CLP9,518" / "$1.847") ARRIBA de los tramos.
+     * Cualquier otra pantalla (ganancias, ir a buscar al pasajero, mapa...) devuelve null.
+     */
+    fun parseRequest(lines: List<String>): RideOffer? {
+        val clean = normalize(lines)
+        if (!ScreenFilter.hasAcceptButton(clean)) return null
+        val offer = parse(clean.joinToString("\n"), requireLegs = true, strict = true) ?: return null
+        return if (offer.legs.size == 2) offer else null
+    }
+
     fun parse(lines: List<String>, requireLegs: Boolean = false): RideOffer? =
         parse(normalize(lines).joinToString("\n"), requireLegs)
 
-    fun parse(text: String, requireLegs: Boolean = false): RideOffer? {
+    fun parse(text: String, requireLegs: Boolean = false, strict: Boolean = false): RideOffer? {
         val legs = mutableListOf<Pair<IntRange, Leg>>()
         fun overlaps(r: IntRange) = legs.any { it.first.first <= r.last && r.first <= it.first.last }
 
@@ -99,9 +120,14 @@ object OfferParser {
         }
         if (distanceKm <= 0.0) return null
 
-        val price = findPrice(text, firstDistancePos) ?: return null
+        val price = findPrice(text, firstDistancePos, onlyBefore = strict) ?: return null
         if (price <= 0.0) return null
-        return RideOffer(price, distanceKm, durationMin?.takeIf { it > 0 }, legs.map { it.second })
+        val payment = when {
+            CASH.containsMatchIn(text) -> Payment.CASH
+            CARD.containsMatchIn(text) -> Payment.CARD
+            else -> Payment.UNKNOWN
+        }
+        return RideOffer(price, distanceKm, durationMin?.takeIf { it > 0 }, legs.map { it.second }, payment)
     }
 
     /**
@@ -110,7 +136,7 @@ object OfferParser {
      * Se prefieren los montos que están solos en su línea ("$1.847") por sobre los desgloses
      * ("$625 de tarifa base", "$96 de tarifa de gasolina").
      */
-    private fun findPrice(text: String, anchor: Int): Double? {
+    private fun findPrice(text: String, anchor: Int, onlyBefore: Boolean = false): Double? {
         data class Cand(val pos: Int, val value: Double, val alone: Boolean)
 
         fun candidates(re: Regex): List<Cand> = re.findAll(text).mapNotNull { m ->
@@ -126,6 +152,7 @@ object OfferParser {
         val cands = all.filter { it.alone }.ifEmpty { all }
         if (cands.isEmpty()) return null
         val before = cands.filter { it.pos <= anchor }.maxByOrNull { it.pos }
+        if (onlyBefore) return before?.value
         return (before ?: cands.minByOrNull { it.pos })?.value
     }
 

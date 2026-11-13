@@ -129,7 +129,7 @@ class OfferParserTest {
         near(13509.68, bad.perHour)
         assertFalse(bad.profitable)
 
-        val good = ProfitCalculator.evaluate(RideOffer(9000.0, 12.0, 25.0), Rules(minPerKm = 700.0, costPerKm = 100.0))
+        val good = ProfitCalculator.evaluate(RideOffer(9000.0, 12.0, 25.0, payment = Payment.CARD), Rules(minPerKm = 700.0, costPerKm = 100.0))
         near(750.0, good.perKm)
         near(7800.0, good.net)
         assertTrue(good.profitable)

@@ -7,6 +7,8 @@ data class Rules(
     val minPerHour: Double = 0.0,
     /** Costo propio por km (bencina, desgaste...); 0 = no se descuenta. */
     val costPerKm: Double = 0.0,
+    /** Solo carreras pagadas con tarjeta: efectivo o pago no visible = no rentable. */
+    val cardOnly: Boolean = true,
 )
 
 data class Evaluation(
@@ -17,6 +19,7 @@ data class Evaluation(
     val netPerHour: Double?,
     val perKmOk: Boolean,
     val perHourOk: Boolean,
+    val paymentOk: Boolean,
     val profitable: Boolean,
 )
 
@@ -31,7 +34,11 @@ object ProfitCalculator {
         val perKmOk = perKm >= rules.minPerKm
         // Si se exige un mínimo por hora pero no se pudo leer el tiempo, no se bloquea por eso.
         val perHourOk = rules.minPerHour <= 0 || perHour == null || perHour >= rules.minPerHour
-        return Evaluation(offer, perKm, perHour, net, netPerHour, perKmOk, perHourOk, perKmOk && perHourOk)
+        val paymentOk = !rules.cardOnly || offer.payment == Payment.CARD
+        return Evaluation(
+            offer, perKm, perHour, net, netPerHour, perKmOk, perHourOk, paymentOk,
+            perKmOk && perHourOk && paymentOk,
+        )
     }
 }
 
