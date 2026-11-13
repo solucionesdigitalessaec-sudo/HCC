@@ -59,7 +59,7 @@ object OfferParser {
     /** Líneas que contienen montos que NO son la tarifa (propinas incluidas, bonos, ganancias del día...). */
     private val IGNORE_LINE = Regex(
         """incluid|propina|peaje|bono|promo|ganancia(s)? (de )?hoy|saldo|billetera|semana|today|earnings|wallet|""" +
-            """tarifa base|din[aá]mica|gasolina|recargo|descuento""",
+            """tarifa base|din[aá]mica|gasolina|recargo|descuento|\bextra\b""",
         opts,
     )
 
@@ -80,10 +80,23 @@ object OfferParser {
      */
     fun parseRequest(lines: List<String>): RideOffer? {
         val clean = normalize(lines)
+
+        // Cabify (lista de solicitudes): cada tarjeta empieza con "$ 3.855 para ti" y no tiene
+        // botón para aceptar. Se lee cada tarjeta por separado y se devuelve la primera válida.
+        val cards = clean.indices.filter { REQUEST_PRICE.containsMatchIn(clean[it]) }
+        for ((k, start) in cards.withIndex()) {
+            val end = cards.getOrNull(k + 1) ?: clean.size
+            val offer = parse(clean.subList(start, end).joinToString("\n"), requireLegs = true, strict = true)
+            if (offer != null && offer.legs.size == 2) return offer
+        }
+
         if (!ScreenFilter.hasAcceptButton(clean)) return null
         val offer = parse(clean.joinToString("\n"), requireLegs = true, strict = true) ?: return null
         return if (offer.legs.size == 2) offer else null
     }
+
+    /** Línea de tarifa de una tarjeta de solicitud de Cabify: "$ 3.855 para ti". */
+    private val REQUEST_PRICE = Regex("""(?:\$|CLP)\s?\d[\d.,]*\s*para ti""", RegexOption.IGNORE_CASE)
 
     fun parse(lines: List<String>, requireLegs: Boolean = false): RideOffer? =
         parse(normalize(lines).joinToString("\n"), requireLegs)
@@ -144,7 +157,7 @@ object OfferParser {
             if (re === MONEY_PREFIX && m.groupValues[3].isNotBlank()) return@mapNotNull null // "$397/km"
             val line = lineAt(text, m.range.first)
             if (IGNORE_LINE.containsMatchIn(line)) return@mapNotNull null
-            val rest = line.replace(m.value, "").replace(Regex("""(?i)CLP|est\.?|[\s$.,:]"""), "")
+            val rest = line.replace(m.value, "").replace(Regex("""(?i)CLP|est\.?|para ti|[\s$.,:]"""), "")
             Cand(m.range.first, amount(m.groupValues[2]), rest.isEmpty())
         }.toList()
 

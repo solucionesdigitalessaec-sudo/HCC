@@ -136,4 +136,33 @@ class RequestReaderTest {
         assertEquals("+CLP1,750.00 incluido", OfferParser.fixOcrDigits("+CLPl,750.00 incluido"))
         assertEquals("1O min (3,O km)".let { OfferParser.fixOcrDigits(it) }, "10 min (3,0 km)")
     }
+
+    private val cabifyCard = listOf(
+        "Cabify", "$ 3.855 para ti", "14 min · 4 km", "Macul | Avenida Américo Vespucio,", "4451",
+        "17 min · 5 km", "La Florida | Calle Nor Poniente, 2866",
+    )
+
+    @Test
+    fun cabifyRequestListIsReadWithoutAcceptButton() {
+        val screen = listOf("Hola, Simón Alejandro", "HASTA EL LUNES 23", "Gana $ 180.000 extra", "6 / 150") +
+            cabifyCard + listOf("Sigue sumando", "A 144 puntos de subir", "Consigue nivel Plata", "Mapa", "Inicio", "Billetera")
+        val o = OfferParser.parseRequest(screen)
+        assertNotNull(o)
+        assertEquals(3855.0, o.price)
+        assertTrue(kotlin.math.abs(o.distanceKm - 9.0) < 0.01)
+        assertTrue(kotlin.math.abs(o.durationMin!! - 31.0) < 0.01)
+    }
+
+    @Test
+    fun cabifyListWithTwoRequestsShowsTheFirst() {
+        val second = listOf("Cabify", "$ 9.900 para ti", "3 min · 1 km", "Ñuñoa | Irarrázaval, 100", "20 min · 10 km", "Providencia | Lyon, 50")
+        val o = OfferParser.parseRequest(listOf("Gana $ 180.000 extra") + cabifyCard + second)
+        assertNotNull(o)
+        assertEquals(3855.0, o.price)
+    }
+
+    @Test
+    fun cabifyCardWithoutLegsIsIgnored() {
+        assertNull(OfferParser.parseRequest(listOf("Cabify", "$ 3.855 para ti", "Macul")))
+    }
 }
