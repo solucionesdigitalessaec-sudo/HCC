@@ -1,109 +1,87 @@
 # KMRentable · app Android para conductores
 
-Cuando te llega una solicitud en **Uber Driver, DiDi Conductor o Cabify Driver**, la app lee la
-tarifa, los kilómetros y los minutos de la pantalla y muestra un panel flotante con:
+Cuando llega una solicitud en **Uber, Cabify o DiDi**, KMRentable lee la pantalla y muestra un panel
+grande con el **valor por km**, el pago por hora, los km a manejar (recogida + viaje), los minutos y si la
+carrera es **✅ RENTABLE** o **❌ NO RENTABLE** según tu mínimo por km.
 
-| Dato          | Cómo se calcula                                           |
-| ------------- | --------------------------------------------------------- |
-| **Valor km**  | tarifa ÷ km totales (recogida + viaje)                    |
-| **Por hora**  | tarifa ÷ minutos totales × 60                             |
-| **Pagan**     | tarifa de la solicitud                                    |
-| **Km a manejar** | km de recogida + km del viaje                          |
-| **Minutos**   | minutos de recogida + minutos del viaje                   |
-| **Faltan / Te queda** | cuánto faltaría para llegar al mínimo, o la ganancia neta si configuras tu costo por km |
+La app **solo muestra información**: no acepta ni rechaza viajes. Nada sale del teléfono.
 
-Arriba aparece **✅ RENTABLE** (verde) o **❌ NO RENTABLE** (rojo). Por defecto una carrera es
-rentable si paga **$700 o más por km**. Puedes cambiar el mínimo y agregar un mínimo por hora.
+| Dato             | Cómo se calcula                                  |
+| ---------------- | ------------------------------------------------ |
+| **Valor km**     | tarifa ÷ km totales (recogida + viaje)           |
+| **Por hora**     | tarifa ÷ minutos totales × 60                    |
+| **Km a manejar** | km de recogida + km del viaje                    |
+| **Faltan / Te queda** | cuánto faltaría para el mínimo, o la ganancia neta si configuras tu costo por km |
 
-Cuando la carrera es **rentable suena un aviso** (tres tonos) para que lo sepas sin mirar el
-teléfono; las no rentables no suenan. Se puede apagar y probar en la pantalla de ajustes. Usa el
-volumen de notificaciones, así que respeta el modo silencio.
+## Uso diario
 
-Ejemplo (la solicitud de Uber de la captura): $6.980 · 9 min (3,6 km) + 22 min (14 km)
-→ 17,6 km, 31 min → **$397/km**, $13.510/h → **NO RENTABLE** (le faltan $5.340 para llegar a $700/km).
+1. Abre KMRentable: si ya está configurada, aparece de inmediato el aviso de Android para grabar la pantalla.
+2. Elige **Pantalla completa** y toca **Empezar**. (Android lo pregunta en cada turno; no se puede guardar.)
+3. Abre Uber, Cabify o DiDi y trabaja normal. Para terminar: **Terminar turno** en la notificación o en la app.
 
-La app **solo lee**: no acepta ni rechaza viajes por ti (hacerlo de forma automática puede
-violar los términos de las plataformas). Nada sale del teléfono; no usa internet.
+El panel queda en pantalla hasta que lo toques; si lo cierras, esa solicitud no vuelve a abrirlo.
+Se mueve arrastrándolo. Suena un aviso (y vibra) cuando la carrera es rentable.
+
+## Configuración (una sola vez)
+
+La app muestra los pasos con ✅ cuando están listos:
+
+1. **Mostrar sobre otras apps**: para dibujar el panel encima de la app de conducción.
+2. **Notificaciones** (Android 13+): para ver "turno activo" y terminarlo desde ahí.
+3. **Batería sin restricciones** y, en Xiaomi, **"Mostrar ventanas emergentes mientras se ejecuta en
+   segundo plano"** (botón "Abrir permisos").
+
+Ya no usa el servicio de accesibilidad: no hay "ajustes restringidos".
 
 ## Qué cuenta como solicitud
 
-Solo se abre el panel con la tarjeta de una solicitud real, que debe traer TODO esto:
+Solo se abre el panel con la tarjeta de una solicitud real:
 
-1. el botón para aceptar ("Aceptar" / "Toca para aceptar"),
-2. la tarifa arriba ("CLP9,518" en Uber, "$1.847" en DiDi), sola en su línea,
-3. exactamente dos tramos debajo: recogida y destino ("4 min • 1.6 km", "7 min (3,7 km)").
+- **Uber / DiDi**: botón para aceptar + tarifa arriba ("CLP9,518", "$1.847") + exactamente dos tramos
+  (recogida y destino: "4 min • 1.6 km", "7 min (3,7 km)").
+- **Cabify**: la tarjeta "$ 3.855 para ti" con sus dos tramos (lista general y solicitudes flotantes).
+  Si hay varias en la lista, se muestra la de más arriba.
 
 Pantallas de ganancias, de ir a buscar al pasajero, avisos o el mapa no abren el panel.
-Con **"Solo carreras con tarjeta"** (activado por defecto), si la solicitud dice efectivo o no se ve
-"Pago con tarjeta", el panel sale **NO RENTABLE** con el motivo, aunque pague bien por km.
+Con **"Solo carreras con tarjeta"** (por defecto), en Uber/DiDi el efectivo o un pago no visible
+marcan **NO RENTABLE** con el motivo. En Cabify no se exige (ahí se desactiva el efectivo).
 
-## Dos formas de leer la solicitud
+## Cómo lee la pantalla
 
-1. **Texto (accesibilidad):** lee el texto de la pantalla. Es la que dibuja el panel, siempre debe estar activa.
-   Uber y DiDi esconden su texto a este tipo de lectura (Android 14+), así que con ellas no basta.
-2. **Imagen (turno):** en la app toca **▶ Empezar turno** y acepta grabar la **pantalla completa**.
-   Mientras dure el turno se toma una captura cada segundo y se reconoce el texto con ML Kit
-   (sin internet). Aparece el ícono de grabación de Android y una notificación con "Terminar turno".
+Durante el turno se toma una captura cada segundo (MediaProjection) y se reconoce el texto con ML Kit,
+sin internet. Se tapa el propio panel en la captura para no leerse a sí misma, y una solicitud tiene que
+leerse igual en dos capturas seguidas antes de mostrarse.
 
-## Instalar
+## Instalar (pruebas)
 
-1. En GitHub, abre **Releases › KMRentable (última versión)** y descarga `kmrentable.apk`
-   desde el teléfono (o en **Actions › APK KMRentable ›** última ejecución › *Artifacts*).
-2. Ábrelo y permite "instalar apps de origen desconocido".
-   - Si **Google Play Protect** dice "Se bloqueó la app": Play Store › tu foto › Play Protect › ⚙️ ›
-     apaga *Analizar apps con Play Protect*, instala y vuelve a encenderlo. Pasa porque la app usa
-     el servicio de accesibilidad para leer la pantalla.
-3. Abre **KMRentable** › *Abrir ajustes de accesibilidad* › activa **KMRentable**.
-   - En Android 13+ puede salir **"Ajuste restringido"**. Ve a *Ajustes › Apps › KMRentable ›
-     menú ⋮ › Permitir ajustes restringidos* (botón "Abrir info de la app") y vuelve a activarlo.
-4. Ajusta tus reglas (mínimo $/km, $/h, costo por km) y abre Uber/DiDi/Cabify.
-
-El panel se queda en pantalla hasta que lo toques (o hasta que llegue otra solicitud, que lo reemplaza). Se mueve arrastrándolo. Si prefieres que se oculte solo, configura los segundos en la app.
-
-## Guardar todas las versiones en tu PC
-
-Cada vez que se cambia algo, GitHub construye una versión nueva (**v1.4, v1.5, ...**) y la guarda
-en *Releases*. La versión aparece arriba en la pantalla de la app.
-
-Para tenerlas todas en tu PC, en PowerShell, dentro de esta carpeta:
-
-```powershell
-powershell -ExecutionPolicy Bypass -File descargar-apks.ps1
-```
-
-Crea `Documentos\KMRentable\APK` y baja ahí cada versión (`kmrentable-v1.6.apk`, ...).
-Si lo vuelves a ejecutar, solo baja las nuevas.
-
-## Firma de la app
-
-Todas las versiones se firman con la misma clave para poder instalarlas encima de la anterior.
-La clave se crea una vez en GitHub Actions y se guarda en su **caché privada** (no está en el código).
-Si pasan más de 7 días sin compilar, GitHub puede borrar esa caché: se crea una clave nueva y hay que
-desinstalar e instalar una vez. Lo mismo pasa la primera vez que se compile en otra rama (por ejemplo `main`).
+Id. de la app: `cl.kmrentable.app`.
+APK de cada versión en GitHub › Releases (`kmrentable-v1.N.apk`); la última siempre en
+`releases/download/kmrentable-ultima/kmrentable.apk`. Para distribuir a conductores se usará la
+prueba interna de Google Play.
 
 ## Si una solicitud no se detecta bien
 
-Cada app muestra los datos con formato distinto y lo cambian seguido. En la app, sección 4,
-toca **"Copiar último texto leído"** y pega ese texto; con eso se agrega el formato a
-`core/src/main/kotlin/.../OfferParser.kt` y a sus pruebas.
+En la app, sección "Si algo no funciona", toca **Copiar diagnóstico** con la solicitud en pantalla (o
+justo después) y envíalo: incluye el texto que se reconoció en la captura.
 
 ## Estructura
 
 ```
 carrera-rentable/
-├── core/   Kotlin puro: lectura del texto (OfferParser) y cálculo (ProfitCalculator) + pruebas
-└── app/    Android: servicio de accesibilidad, panel flotante y pantalla de ajustes
+├── core/   Kotlin puro: lectura de la solicitud (OfferParser, ScreenFilter) y cálculo + pruebas
+└── app/    Android: turno (captura + ML Kit), panel flotante, configuración guiada
 ```
 
-## Compilar en tu computador
+## Compilar
 
-Requiere JDK 17 y el SDK de Android (Android Studio lo instala). Abre la carpeta `carrera-rentable`
-en Android Studio, o desde la terminal:
+JDK 17 y SDK de Android. `gradle :core:test :app:assembleDebug`.
+GitHub Actions (`.github/workflows/carrera-rentable-apk.yml`) compila, prueba y publica cada versión.
 
-```bash
-gradle :core:test :app:assembleDebug
-# APK en app/build/outputs/apk/debug/app-debug.apk
-```
+### Firma
+Todas las versiones se firman con la misma clave, guardada en la caché privada de GitHub Actions (no
+está en el código). Si pasan más de 7 días sin compilar, GitHub puede borrarla y habrá que desinstalar
+e instalar una vez. Para Google Play se usará una clave de subida guardada como secreto.
 
-GitHub Actions (`.github/workflows/carrera-rentable-apk.yml`) hace esto en cada cambio dentro de
-esta carpeta y publica el APK.
+### Guardar las versiones en el PC
+`powershell -ExecutionPolicy Bypass -File descargar-apks.ps1 -Carpeta C:\src\KmRentable` baja cada
+versión nueva a `C:\src\KmRentable\APK`.

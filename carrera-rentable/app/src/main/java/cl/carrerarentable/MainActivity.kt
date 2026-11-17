@@ -3,7 +3,6 @@ package cl.carrerarentable
 import android.app.Activity
 import android.content.ClipData
 import android.content.ClipboardManager
-import android.content.ComponentName
 import android.content.Intent
 import android.graphics.Color
 import android.graphics.Typeface
@@ -25,7 +24,9 @@ import cl.carrerarentable.core.Rules
 
 class MainActivity : Activity() {
 
-    private lateinit var status: TextView
+    private lateinit var setupBox: LinearLayout
+    /** Ofrecer empezar el turno apenas se abre la app (solo la primera vez que se muestra). */
+    private var autoStart = false
     private lateinit var minKm: EditText
     private lateinit var minHour: EditText
     private lateinit var costKm: EditText
@@ -48,32 +49,18 @@ class MainActivity : Activity() {
             setPadding(dp(16), dp(16), dp(16), dp(32))
         }
         setContentView(ScrollView(this).apply { addView(col) })
+        autoStart = savedInstanceState == null
 
         val version = runCatching { packageManager.getPackageInfo(packageName, 0).versionName }.getOrNull()
         col.addView(note("Versión ${version ?: "?"}"))
 
-        // 1. Activación
-        col.addView(title("1. Activar lectura de solicitudes"))
-        status = TextView(this).apply { textSize = 16f; typeface = Typeface.DEFAULT_BOLD }
-        col.addView(status)
-        col.addView(note(
-            "Activa \"KMRentable\" en Ajustes › Accesibilidad. Si aparece como \"Ajuste restringido\": " +
-                "Ajustes › Apps › KMRentable › menú ⋮ › \"Permitir ajustes restringidos\", y vuelve a intentarlo."
-        ))
-        col.addView(button("Abrir ajustes de accesibilidad") {
-            startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
-        })
-        col.addView(button("Abrir info de la app (ajustes restringidos)") {
-            startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, android.net.Uri.parse("package:$packageName")))
-        })
+        // Configuración guiada (una sola vez)
+        col.addView(title("Configuración (una sola vez)"))
+        setupBox = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        col.addView(setupBox)
 
-        // Turno: lectura por imagen
-        col.addView(title("Turno (Uber, DiDi y Cabify)"))
-        col.addView(note(
-            "Uber y DiDi esconden su texto, así que se lee la pantalla como imagen (también sirve con Cabify). Al empezar, Android " +
-                "pregunta si permites grabar la pantalla: elige \"Pantalla completa\" y acepta. " +
-                "Necesita también la lectura de arriba activada (es la que dibuja el panel)."
-        ))
+        // Turno
+        col.addView(title("Turno"))
         shiftStatus = TextView(this).apply { textSize = 16f; typeface = Typeface.DEFAULT_BOLD }
         col.addView(shiftStatus)
         shiftButton = button("") {
@@ -83,8 +70,15 @@ class MainActivity : Activity() {
             } else {
                 startShift()
             }
+        }.apply {
+            textSize = 20f
+            minHeight = dp(64)
         }
         col.addView(shiftButton)
+        col.addView(note(
+            "Al empezar, Android pregunta si permites grabar la pantalla: elige \"Pantalla completa\" y toca " +
+                "\"Empezar\". Android lo pregunta en cada turno; no se puede guardar. Luego abre Uber, Cabify o DiDi."
+        ))
 
         // 2. Reglas
         col.addView(title("2. Mis reglas"))
@@ -126,18 +120,16 @@ class MainActivity : Activity() {
         // 4. Diagnóstico
         col.addView(title("4. Si algo no funciona"))
         col.addView(button("Mostrar panel de prueba") {
-            val svc = RideAccessibilityService.instance
-            if (svc == null) {
-                Toast.makeText(this, "El servicio no está corriendo: actívalo en Accesibilidad", Toast.LENGTH_LONG).show()
-            } else {
-                svc.showTestPanel()
+            if (!OfferController.showTestPanel(this)) {
+                Toast.makeText(this, "Primero activa \"Mostrar sobre otras apps\" (paso 1)", Toast.LENGTH_LONG).show()
             }
         })
         diag = TextView(this).apply { textSize = 13f; setTextIsSelectable(true); setPadding(0, dp(8), 0, dp(8)) }
         col.addView(diag)
-        col.addView(note("Si no aparece el panel en Uber/DiDi/Cabify: deja llegar una solicitud, vuelve aquí y toca \"Copiar diagnóstico\". Pégalo en el chat."))
+        col.addView(note("Si no aparece el panel en Uber/Cabify/DiDi: deja llegar una solicitud, vuelve aquí y toca \"Copiar diagnóstico\". Pégalo en el chat."))
         col.addView(button("Copiar diagnóstico") {
-            val t = Diag.report(this) + "\n\n--- Último texto leído ---\n" + Diag.lastText(this).ifBlank { SettingsStore.lastText(this) }
+            val t = Diag.report(this) + "\n\n--- Último texto leído ---\n" + Diag.lastText(this).ifBlank { "(vacío)" } +
+                "\n\n--- Última solicitud mostrada ---\n" + SettingsStore.lastText(this).ifBlank { "(ninguna)" }
             getSystemService(ClipboardManager::class.java).setPrimaryClip(ClipData.newPlainText("diagnostico", t))
             Toast.makeText(this, "Copiado", Toast.LENGTH_SHORT).show()
         })
@@ -145,15 +137,86 @@ class MainActivity : Activity() {
 
     override fun onResume() {
         super.onResume()
-        val on = isServiceEnabled()
-        status.text = if (on) "● Lectura ACTIVA" else "● Lectura DESACTIVADA"
-        status.setTextColor(Color.parseColor(if (on) "#16A34A" else "#DC2626"))
-        if (on && RideAccessibilityService.instance == null) {
-            status.text = "● Activada, pero el servicio no está corriendo: apágala y préndela en Accesibilidad"
-            status.setTextColor(Color.parseColor("#D97706"))
-        }
+        refreshSetup()
         diag.text = Diag.report(this)
         refreshShift()
+        // Al abrir la app, si todo está configurado, se ofrece empezar el turno de inmediato.
+        if (autoStart && OfferController.canDraw(this) && !ShiftService.running) {
+            autoStart = false
+            startShift()
+        }
+        autoStart = false
+    }
+
+    /** Pasos de configuración con su estado (✅ listo / botón para hacerlo). */
+    private fun refreshSetup() {
+        setupBox.removeAllViews()
+        val overlayOk = OfferController.canDraw(this)
+        setupBox.addView(step(
+            1, "Mostrar sobre otras apps", overlayOk,
+            "Permite dibujar el panel encima de Uber, Cabify o DiDi. Busca KMRentable en la lista y activa el interruptor.",
+            "Activar",
+        ) {
+            startActivity(Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, android.net.Uri.parse("package:$packageName")))
+        })
+        if (android.os.Build.VERSION.SDK_INT >= 33) {
+            val notifOk = checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS) ==
+                android.content.pm.PackageManager.PERMISSION_GRANTED
+            setupBox.addView(step(
+                2, "Notificaciones", notifOk,
+                "Para ver el aviso \"turno activo\" y poder terminarlo desde ahí.", "Permitir",
+            ) { requestPermissions(arrayOf(android.Manifest.permission.POST_NOTIFICATIONS), REQ_NOTIF_ONLY) })
+        }
+        val xiaomi = android.os.Build.MANUFACTURER.lowercase().let { it.contains("xiaomi") || it.contains("redmi") || it.contains("poco") }
+        if (xiaomi) {
+            setupBox.addView(step(
+                3, "Xiaomi: ventanas emergentes y batería", null,
+                "En \"Otros permisos\" activa \"Mostrar ventanas emergentes mientras se ejecuta en segundo plano\". " +
+                    "En \"Ahorro de batería\" elige \"Sin restricciones\".",
+                "Abrir permisos",
+            ) { openXiaomiPermissions() })
+        } else {
+            setupBox.addView(step(
+                3, "Batería (recomendado)", null,
+                "En \"Batería\" elige \"Sin restricciones\" para que Android no detenga el turno.",
+                "Abrir ajustes de la app",
+            ) { openAppDetails() })
+        }
+        if (overlayOk) {
+            setupBox.addView(TextView(this).apply {
+                text = "✅ Listo para trabajar"
+                textSize = 16f; typeface = Typeface.DEFAULT_BOLD
+                setTextColor(Color.parseColor("#16A34A")); setPadding(0, dp(8), 0, 0)
+            })
+        }
+    }
+
+    /** Un paso de la configuración. done = null: paso recomendado sin forma de comprobarlo. */
+    private fun step(n: Int, name: String, done: Boolean?, help: String, action: String, onClick: () -> Unit): View =
+        LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(0, dp(10), 0, dp(4))
+            val mark = when (done) { true -> "✅"; false -> "⬜"; null -> "💡" }
+            addView(TextView(context).apply {
+                text = "$mark  Paso $n · $name"
+                textSize = 17f; typeface = Typeface.DEFAULT_BOLD
+                setTextColor(Color.parseColor(if (done == true) "#16A34A" else "#111827"))
+            })
+            if (done != true) {
+                addView(note(help))
+                addView(button(action) { onClick() })
+            }
+        }
+
+    private fun openAppDetails() {
+        startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, android.net.Uri.parse("package:$packageName")))
+    }
+
+    private fun openXiaomiPermissions() {
+        val miui = Intent("miui.intent.action.APP_PERM_EDITOR")
+            .setClassName("com.miui.securitycenter", "com.miui.permcenter.permissions.PermissionsEditorActivity")
+            .putExtra("extra_pkgname", packageName)
+        runCatching { startActivity(miui) }.onFailure { openAppDetails() }
     }
 
     override fun onPause() {
@@ -169,8 +232,8 @@ class MainActivity : Activity() {
     }
 
     private fun startShift() {
-        if (RideAccessibilityService.instance == null) {
-            Toast.makeText(this, "Primero activa KMRentable en Accesibilidad (paso 1)", Toast.LENGTH_LONG).show()
+        if (!OfferController.canDraw(this)) {
+            Toast.makeText(this, "Primero activa \"Mostrar sobre otras apps\" (paso 1)", Toast.LENGTH_LONG).show()
             return
         }
         if (android.os.Build.VERSION.SDK_INT >= 33 &&
@@ -187,6 +250,10 @@ class MainActivity : Activity() {
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
         // Con o sin permiso de notificaciones, el turno puede funcionar.
+        if (requestCode == REQ_NOTIF_ONLY) {
+            refreshSetup()
+            return
+        }
         if (requestCode == REQ_NOTIF) {
             val mpm = getSystemService(android.media.projection.MediaProjectionManager::class.java)
             @Suppress("DEPRECATION")
@@ -204,7 +271,7 @@ class MainActivity : Activity() {
             return
         }
         ShiftService.start(this, resultCode, data)
-        Toast.makeText(this, "Turno iniciado: abre Uber o DiDi", Toast.LENGTH_SHORT).show()
+        Toast.makeText(this, "Turno iniciado: abre Uber, Cabify o DiDi", Toast.LENGTH_SHORT).show()
         shiftButton.postDelayed({ refreshShift() }, 800)
     }
 
@@ -235,12 +302,6 @@ class MainActivity : Activity() {
             if (rules.costPerKm > 0) appendLine("Te queda: ${Money.clp(ev.net)}")
             if (!ev.perKmOk) append("Para ser rentable debería pagar ${Money.clp(rules.minPerKm * km)}")
         }
-    }
-
-    private fun isServiceEnabled(): Boolean {
-        val me = ComponentName(this, RideAccessibilityService::class.java)
-        val enabled = Settings.Secure.getString(contentResolver, Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES) ?: return false
-        return enabled.split(':').any { ComponentName.unflattenFromString(it) == me }
     }
 
     // ---------- helpers de interfaz ----------
@@ -278,5 +339,6 @@ class MainActivity : Activity() {
     companion object {
         private const val REQ_CAPTURE = 41
         private const val REQ_NOTIF = 42
+        private const val REQ_NOTIF_ONLY = 43
     }
 }

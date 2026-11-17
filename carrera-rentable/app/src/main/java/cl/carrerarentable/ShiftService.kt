@@ -32,9 +32,9 @@ import com.google.mlkit.vision.text.TextRecognizer
 import com.google.mlkit.vision.text.latin.TextRecognizerOptions
 
 /**
- * "Turno": lectura por imagen. Uber y DiDi esconden su texto a los servicios de accesibilidad,
- * así que mientras dura el turno se toma una captura de la pantalla cada segundo y se reconoce
- * el texto con ML Kit (sin internet). El texto pasa al mismo lector de solicitudes de siempre.
+ * "Turno": mientras dura, se toma una captura de la pantalla cada segundo y se reconoce el texto
+ * con ML Kit (sin internet). El texto pasa a OfferController, que decide si hay una solicitud
+ * de Uber / Cabify / DiDi y muestra el panel.
  */
 class ShiftService : Service() {
 
@@ -130,9 +130,8 @@ class ShiftService : Service() {
         if (busy) return
         val power = getSystemService(PowerManager::class.java)
         if (!power.isInteractive) return // pantalla apagada
-        val svc = RideAccessibilityService.instance
-        if (svc == null) {
-            diag("El lector de accesibilidad no está activo: el panel no se puede mostrar")
+        if (!OfferController.canDraw(this)) {
+            diag("Falta el permiso \"Mostrar sobre otras apps\": el panel no se puede mostrar")
             return
         }
         val image = runCatching { reader?.acquireLatestImage() }.getOrNull() ?: return
@@ -150,7 +149,7 @@ class ShiftService : Service() {
         }
 
         // Tapar nuestro propio panel para no leer sus números.
-        svc.overlayBounds()?.let { r ->
+        OfferController.overlayBounds()?.let { r ->
             val p = Paint().apply { color = Color.BLACK }
             Canvas(bitmap).drawRect(r.left * scale, r.top * scale, r.right * scale, r.bottom * scale, p)
         }
@@ -168,7 +167,7 @@ class ShiftService : Service() {
                     diag("captura descartada: se veía nuestro panel", raw.map { it.text })
                 } else {
                     val lines = cleaned.map { it.text }
-                    val found = RideAccessibilityService.instance?.onScreenText(lines) ?: false
+                    val found = OfferController.onScreenText(this, lines)
                     diag("líneas: ${lines.size} · oferta: ${if (found) "SÍ" else "no"}", lines, found)
                 }
             }
@@ -207,6 +206,7 @@ class ShiftService : Service() {
 
     override fun onDestroy() {
         running = false
+        OfferController.hide()
         handler.removeCallbacksAndMessages(null)
         workerHandler.removeCallbacksAndMessages(null)
         worker.quitSafely()

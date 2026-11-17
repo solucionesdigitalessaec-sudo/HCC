@@ -40,27 +40,3 @@ object SettingsStore {
     fun lastText(c: Context) = prefs(c).getString("ultimo_texto", "") ?: ""
     fun setLastText(c: Context, t: String) = prefs(c).edit().putString("ultimo_texto", t).apply()
 }
-
-/** Apps de conductor que se leen. Se reconoce por nombre de paquete. */
-object RideApps {
-    private val known = setOf(
-        "com.ubercab.driver",
-        "com.didiglobal.driver",
-        "com.didi.driver.global",
-        "com.cabify.driver",
-    )
-    private val keywords = listOf("uber", "didi", "cabify", "indriver")
-    /** Apps de pasajero / comida de las mismas empresas: no se leen. */
-    private val excluded = setOf("com.ubercab", "com.ubercab.eats", "com.didiglobal.passenger", "com.cabify.rider")
-
-    fun isRideApp(pkg: String?): Boolean {
-        if (pkg == null || pkg == BuildConfigPkg.SELF) return false
-        val p = pkg.lowercase()
-        if (p in excluded) return false
-        return p in known || keywords.any { p.contains(it) }
-    }
-}
-
-object BuildConfigPkg {
-    const val SELF = "cl.carrerarentable"
-}

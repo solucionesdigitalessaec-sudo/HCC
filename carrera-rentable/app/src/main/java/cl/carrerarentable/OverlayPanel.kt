@@ -1,6 +1,6 @@
 package cl.carrerarentable
 
-import android.accessibilityservice.AccessibilityService
+import android.content.Context
 import android.annotation.SuppressLint
 import android.graphics.Color
 import android.graphics.PixelFormat
@@ -24,11 +24,11 @@ import cl.carrerarentable.core.Rules
 import kotlin.math.abs
 
 /**
- * Panel flotante sobre la app de conductor. Usa una ventana de accesibilidad, así que no
- * necesita el permiso "mostrar sobre otras apps". Tocar = cerrar; arrastrar = moverlo.
+ * Panel flotante sobre la app de conductor (permiso "Mostrar sobre otras apps").
+ * Tocar = cerrar; arrastrar = moverlo.
  */
 class OverlayPanel(
-    private val service: AccessibilityService,
+    private val service: Context,
     /** Se llama cuando el conductor cierra el panel (o se cierra por tiempo). */
     private val onDismissed: () -> Unit = {},
 ) {
@@ -46,7 +46,7 @@ class OverlayPanel(
         val lp = WindowManager.LayoutParams(
             (metrics.widthPixels * 0.95).toInt(),
             WindowManager.LayoutParams.WRAP_CONTENT,
-            WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY,
+            WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
             PixelFormat.TRANSLUCENT,
         ).apply {

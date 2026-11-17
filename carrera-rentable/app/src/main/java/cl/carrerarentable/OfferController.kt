@@ -1,0 +1,132 @@
+package cl.carrerarentable
+
+import android.content.Context
+import android.os.SystemClock
+import android.os.VibrationEffect
+import android.os.Vibrator
+import android.provider.Settings
+import cl.carrerarentable.core.OfferParser
+import cl.carrerarentable.core.Payment
+import cl.carrerarentable.core.ProfitCalculator
+import cl.carrerarentable.core.RideOffer
+
+/**
+ * Recibe el texto reconocido en cada captura de pantalla (ver ShiftService), decide si hay una
+ * solicitud real y muestra, actualiza u oculta el panel flotante. Todo se llama en el hilo principal.
+ */
+object OfferController {
+
+    private var panel: OverlayPanel? = null
+    private lateinit var app: Context
+
+    private var lastSignature: String? = null
+    private var lastOfferAt = 0L
+    /** Solicitud que todavía no se confirma (debe repetirse en la captura siguiente). */
+    private var pendingSignature: String? = null
+    /** Tarifa de la solicitud que muestra el panel. */
+    private var shownPrice: Double? = null
+    /** Tarifa de la solicitud cuyo panel cerró el conductor (no se vuelve a mostrar mientras siga en pantalla). */
+    private var dismissedPrice: Double? = null
+
+    private fun panel(c: Context): OverlayPanel {
+        if (!::app.isInitialized) app = c.applicationContext
+        return panel ?: OverlayPanel(app) {
+            // El conductor cerró el panel: esa misma solicitud no vuelve a abrirlo.
+            dismissedPrice = shownPrice
+        }.also { panel = it }
+    }
+
+    /** ¿Se puede dibujar el panel sobre otras apps? (permiso "Mostrar sobre otras apps"). */
+    fun canDraw(c: Context) = Settings.canDrawOverlays(c)
+
+    /** Zona de la pantalla que ocupa el panel (para taparla en la captura). Se puede leer desde otro hilo. */
+    fun overlayBounds(): android.graphics.Rect? = panel?.screenBounds()
+
+    /**
+     * Texto de una captura. Para evitar "carreras fantasma":
+     *  - lectura estricta de la solicitud (ver OfferParser.parseRequest),
+     *  - la misma solicitud debe leerse igual en dos capturas seguidas antes de mostrarla.
+     * Devuelve true si hay una solicitud en pantalla.
+     */
+    fun onScreenText(c: Context, lines: List<String>): Boolean {
+        val p = panel(c)
+        val offer = if (lines.isEmpty()) null else OfferParser.parseRequest(lines)
+        if (offer == null) {
+            pendingSignature = null
+            handleOffer(c, null, lines)
+            return false
+        }
+        val signature = signatureOf(offer)
+        val alreadyShown = signature == lastSignature && p.isShowing
+        if (!alreadyShown && signature != pendingSignature) {
+            pendingSignature = signature
+            lastOfferAt = SystemClock.elapsedRealtime() // no ocultar el panel actual mientras tanto
+            return true
+        }
+        pendingSignature = null
+        handleOffer(c, offer, lines)
+        return true
+    }
+
+    private fun signatureOf(o: RideOffer) = "${o.price}|${o.distanceKm}|${o.durationMin}"
+
+    private fun handleOffer(c: Context, offer: RideOffer?, lines: List<String>) {
+        val p = panel(c)
+        val now = SystemClock.elapsedRealtime()
+        if (offer == null) {
+            // Si la solicitud cerrada ya no está en pantalla, una nueva con la misma tarifa sí se muestra.
+            if (dismissedPrice != null && now - lastOfferAt > 3000) dismissedPrice = null
+            // Por defecto el panel queda hasta que el conductor lo toque; solo se oculta solo si configuró segundos.
+            if (SettingsStore.hideSeconds(c) > 0 && p.isShowing && now - lastOfferAt > 2500) {
+                p.hide()
+                lastSignature = null
+            }
+            return
+        }
+
+        lastOfferAt = now
+        // Misma solicitud que el conductor ya cerró: no reabrir el panel.
+        dismissedPrice?.let { if (kotlin.math.abs(it - offer.price) < 1.0) return else dismissedPrice = null }
+        val signature = signatureOf(offer)
+        if (signature == lastSignature && p.isShowing) return
+        lastSignature = signature
+        shownPrice = offer.price
+
+        SettingsStore.setLastText(c, OfferParser.normalize(lines).joinToString("\n"))
+        val rules = SettingsStore.rules(c)
+        // En Cabify el conductor desactiva el efectivo: si no se ve la forma de pago, se toma como tarjeta.
+        val cabify = lines.any { it.contains("cabify", ignoreCase = true) || it.contains("para ti", ignoreCase = true) }
+        val adjusted = if (cabify && offer.payment == Payment.UNKNOWN) offer.copy(payment = Payment.CARD) else offer
+        val evaluation = ProfitCalculator.evaluate(adjusted, rules)
+        if (!canDraw(c)) {
+            Diag.ocr(c, "solicitud detectada, pero falta el permiso \"Mostrar sobre otras apps\"")
+            return
+        }
+        p.show(evaluation, rules, SettingsStore.hideSeconds(c))
+        if (SettingsStore.vibrate(c)) buzz(c, evaluation.profitable)
+        if (evaluation.profitable && SettingsStore.sound(c)) Alerts.playProfitable()
+    }
+
+    /** Panel de ejemplo para comprobar el permiso y cómo se ve. */
+    fun showTestPanel(c: Context): Boolean {
+        if (!canDraw(c)) return false
+        val rules = SettingsStore.rules(c)
+        val offer = OfferParser.parse("CLP9,518\n4 min • 1.6 km\nPago con tarjeta\n29 min • 25.0 km") ?: return false
+        panel(c).show(ProfitCalculator.evaluate(offer, rules), rules, 8)
+        if (SettingsStore.vibrate(c)) buzz(c, false)
+        return true
+    }
+
+    fun hide() {
+        panel?.hide()
+        lastSignature = null
+        pendingSignature = null
+    }
+
+    private fun buzz(c: Context, good: Boolean) {
+        val v = c.getSystemService(Vibrator::class.java) ?: return
+        val effect = if (good) VibrationEffect.createOneShot(120, VibrationEffect.DEFAULT_AMPLITUDE)
+        else VibrationEffect.createWaveform(longArrayOf(0, 80, 80, 80), -1)
+        runCatching { v.vibrate(effect) }
+    }
+}

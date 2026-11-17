@@ -10,7 +10,7 @@ android {
     compileSdk = 35
 
     defaultConfig {
-        applicationId = "cl.carrerarentable"
+        applicationId = "cl.kmrentable.app"
         minSdk = 26
         targetSdk = 35
         // En GitHub Actions se pasa -PbuildNumber=<n> y cada compilación queda como versión 1.<n>.
