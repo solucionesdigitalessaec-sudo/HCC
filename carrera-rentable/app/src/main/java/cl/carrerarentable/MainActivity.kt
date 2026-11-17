@@ -48,7 +48,34 @@ class MainActivity : Activity() {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(16), dp(16), dp(16), dp(32))
         }
-        setContentView(ScrollView(this).apply { addView(col) })
+        val scroll = ScrollView(this).apply { addView(col) }
+        // Encabezado propio (el tema no tiene barra de título).
+        val header = TextView(this).apply {
+            text = "KMRentable"
+            textSize = 22f; typeface = Typeface.DEFAULT_BOLD
+            setTextColor(Color.WHITE)
+            setBackgroundColor(Color.parseColor("#001220"))
+            setPadding(dp(16), dp(14), dp(16), dp(14))
+        }
+        val screen = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setBackgroundColor(Color.parseColor("#001220"))
+            addView(header)
+            addView(scroll, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f))
+        }
+        scroll.setBackgroundColor(Color.parseColor("#F9FAFB"))
+        // Android 15/16 dibuja la app debajo de las barras del sistema: dejar ese espacio libre.
+        screen.setOnApplyWindowInsetsListener { v, insets ->
+            if (android.os.Build.VERSION.SDK_INT >= 30) {
+                val b = insets.getInsets(android.view.WindowInsets.Type.systemBars() or android.view.WindowInsets.Type.displayCutout())
+                v.setPadding(b.left, b.top, b.right, b.bottom)
+            } else {
+                @Suppress("DEPRECATION")
+                v.setPadding(insets.systemWindowInsetLeft, insets.systemWindowInsetTop, insets.systemWindowInsetRight, insets.systemWindowInsetBottom)
+            }
+            insets
+        }
+        setContentView(screen)
         autoStart = savedInstanceState == null
 
         val version = runCatching { packageManager.getPackageInfo(packageName, 0).versionName }.getOrNull()

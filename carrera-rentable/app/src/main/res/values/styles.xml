@@ -1,4 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <style name="AppTheme" parent="@android:style/Theme.Material.Light.DarkActionBar" />
+    <!-- Sin barra de título: la app dibuja su propio encabezado. Desde Android 15/16 la ventana
+         ocupa toda la pantalla y MainActivity deja el espacio de las barras del sistema. -->
+    <style name="AppTheme" parent="@android:style/Theme.Material.Light.NoActionBar">
+        <item name="android:statusBarColor">#001220</item>
+        <item name="android:navigationBarColor">#001220</item>
+        <item name="android:windowLightStatusBar">false</item>
+    </style>
 </resources>

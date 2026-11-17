@@ -7,12 +7,12 @@ plugins {
 
 android {
     namespace = "cl.carrerarentable"
-    compileSdk = 35
+    compileSdk = 36
 
     defaultConfig {
         applicationId = "cl.kmrentable.app"
         minSdk = 26
-        targetSdk = 35
+        targetSdk = 36
         // En GitHub Actions se pasa -PbuildNumber=<n> y cada compilación queda como versión 1.<n>.
         val buildNumber = (project.findProperty("buildNumber") as String?)?.toIntOrNull() ?: 1
         versionCode = buildNumber
