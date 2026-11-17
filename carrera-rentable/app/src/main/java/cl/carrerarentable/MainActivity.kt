@@ -168,20 +168,23 @@ class MainActivity : Activity() {
             ) { requestPermissions(arrayOf(android.Manifest.permission.POST_NOTIFICATIONS), REQ_NOTIF_ONLY) })
         }
         val xiaomi = android.os.Build.MANUFACTURER.lowercase().let { it.contains("xiaomi") || it.contains("redmi") || it.contains("poco") }
+        var n = if (android.os.Build.VERSION.SDK_INT >= 33) 3 else 2
         if (xiaomi) {
             setupBox.addView(step(
-                3, "Xiaomi: ventanas emergentes y batería", null,
-                "En \"Otros permisos\" activa \"Mostrar ventanas emergentes mientras se ejecuta en segundo plano\". " +
-                    "En \"Ahorro de batería\" elige \"Sin restricciones\".",
-                "Abrir permisos",
+                n++, "Xiaomi: ventanas emergentes", null,
+                "En \"Otros permisos\" activa \"Mostrar ventanas emergentes mientras se ejecuta en segundo plano\".",
+                "Abrir otros permisos",
             ) { openXiaomiPermissions() })
-        } else {
-            setupBox.addView(step(
-                3, "Batería (recomendado)", null,
-                "En \"Batería\" elige \"Sin restricciones\" para que Android no detenga el turno.",
-                "Abrir ajustes de la app",
-            ) { openAppDetails() })
         }
+        val batteryOk = if (xiaomi) null else
+            getSystemService(android.os.PowerManager::class.java).isIgnoringBatteryOptimizations(packageName)
+        setupBox.addView(step(
+            n, "Batería sin restricciones", batteryOk,
+            if (xiaomi) "En \"Ahorro de batería\" elige \"Sin restricciones\" para que el teléfono no detenga el turno. " +
+                "Si se abre la información de la app, entra a \"Ahorro de batería\"."
+            else "En \"Batería\" elige \"Sin restricciones\" para que Android no detenga el turno.",
+            "Abrir ahorro de batería",
+        ) { openBatterySettings(xiaomi) })
         if (overlayOk) {
             setupBox.addView(TextView(this).apply {
                 text = "✅ Listo para trabajar"
@@ -210,6 +213,18 @@ class MainActivity : Activity() {
 
     private fun openAppDetails() {
         startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, android.net.Uri.parse("package:$packageName")))
+    }
+
+    /** Pantalla de batería de la app: en Xiaomi la de "Ahorro de batería"; si no se puede, la info de la app. */
+    private fun openBatterySettings(xiaomi: Boolean) {
+        if (xiaomi) {
+            val miui = Intent()
+                .setClassName("com.miui.powerkeeper", "com.miui.powerkeeper.ui.HiddenAppsConfigActivity")
+                .putExtra("package_name", packageName)
+                .putExtra("package_label", getString(R.string.app_name))
+            if (runCatching { startActivity(miui) }.isSuccess) return
+        }
+        openAppDetails()
     }
 
     private fun openXiaomiPermissions() {
