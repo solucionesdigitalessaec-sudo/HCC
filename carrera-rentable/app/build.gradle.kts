@@ -33,13 +33,26 @@ android {
         }
     } else null
 
+    // Clave de SUBIDA para Google Play (secreto de GitHub, ver play/CLAVE-DE-SUBIDA.md).
+    // Google Play vuelve a firmar la app con su propia clave; esta solo identifica nuestras subidas.
+    val uploadPath = System.getenv("KMR_UPLOAD_KEYSTORE")
+    val uploadPass = System.getenv("KMR_UPLOAD_PASS")
+    val uploadSigning = if (uploadPath != null && uploadPass != null) {
+        signingConfigs.create("playUpload") {
+            storeFile = file(uploadPath)
+            storePassword = uploadPass
+            keyAlias = "kmrentable-upload"
+            keyPassword = uploadPass
+        }
+    } else null
+
     buildTypes {
         debug {
             if (fixedSigning != null) signingConfig = fixedSigning
         }
         release {
             isMinifyEnabled = false
-            signingConfig = fixedSigning ?: signingConfigs.getByName("debug")
+            signingConfig = uploadSigning ?: fixedSigning ?: signingConfigs.getByName("debug")
         }
     }
 

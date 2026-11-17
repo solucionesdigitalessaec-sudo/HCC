@@ -58,6 +58,36 @@ jobs:
       - name: Pruebas y compilación
         run: gradle :core:test :app:assembleDebug -PbuildNumber=${{ github.run_number }} --no-daemon
 
+      # AAB para Google Play: solo si existe la clave de subida en los secretos del repositorio
+      # (KMR_UPLOAD_KEYSTORE_B64 y KMR_UPLOAD_PASS). Ver carrera-rentable/play/CLAVE-DE-SUBIDA.md.
+      - name: Clave de subida para Google Play
+        env:
+          KS_B64: ${{ secrets.KMR_UPLOAD_KEYSTORE_B64 }}
+          KS_PASS: ${{ secrets.KMR_UPLOAD_PASS }}
+        run: |
+          if [ -n "$KS_B64" ] && [ -n "$KS_PASS" ]; then
+            echo "$KS_B64" | base64 -d > "$RUNNER_TEMP/kmrentable-upload.jks"
+            echo "KMR_UPLOAD_KEYSTORE=$RUNNER_TEMP/kmrentable-upload.jks" >> "$GITHUB_ENV"
+            echo "KMR_UPLOAD_PASS=$KS_PASS" >> "$GITHUB_ENV"
+            echo "HAS_UPLOAD=true" >> "$GITHUB_ENV"
+          else
+            echo "Sin clave de subida en los secretos: no se genera el AAB para Google Play."
+          fi
+
+      - name: AAB para Google Play
+        if: env.HAS_UPLOAD == 'true'
+        run: |
+          gradle :app:bundleRelease -PbuildNumber=${{ github.run_number }} --no-daemon
+          cp app/build/outputs/bundle/release/app-release.aab "kmrentable-v${VERSION}.aab"
+          rm -f "$RUNNER_TEMP/kmrentable-upload.jks"
+
+      - name: Subir AAB (Artifacts de esta ejecución)
+        if: env.HAS_UPLOAD == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: kmrentable-v${{ env.VERSION }}-google-play
+          path: carrera-rentable/kmrentable-v${{ env.VERSION }}.aab
+
       - name: Nombrar APK con su versión
         run: |
           cp app/build/outputs/apk/debug/app-debug.apk kmrentable.apk
