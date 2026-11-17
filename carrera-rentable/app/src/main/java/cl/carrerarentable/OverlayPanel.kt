@@ -47,7 +47,10 @@ class OverlayPanel(
             (metrics.widthPixels * 0.95).toInt(),
             WindowManager.LayoutParams.WRAP_CONTENT,
             WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
-            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
+            // WATCH_OUTSIDE_TOUCH: un toque en cualquier otra parte de la pantalla también cierra el panel
+            // (y ese toque igual llega a la app de abajo, por ejemplo al botón Aceptar).
+            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
+                WindowManager.LayoutParams.FLAG_WATCH_OUTSIDE_TOUCH,
             PixelFormat.TRANSLUCENT,
         ).apply {
             gravity = Gravity.TOP or Gravity.CENTER_HORIZONTAL
@@ -87,6 +90,7 @@ class OverlayPanel(
         var moved = false
         v.setOnTouchListener { _, e ->
             when (e.action) {
+                MotionEvent.ACTION_OUTSIDE -> { hide(); onDismissed() }
                 MotionEvent.ACTION_DOWN -> { startY = e.rawY; startLp = lp.y; moved = false }
                 MotionEvent.ACTION_MOVE -> {
                     val dy = (e.rawY - startY).toInt()
@@ -103,7 +107,9 @@ class OverlayPanel(
         }
     }
 
-    // ---------- diseño (ver carrera-rentable/docs/panel-propuesto.png) ----------
+    // ---------- diseño compacto ----------
+    // Importante: ScreenFilter reconoce este panel en las capturas por "RENTABLE" (arriba) y
+    // "POR HORA" (fila de etiquetas, lo más abajo). Si cambias esos textos, actualízalo también.
 
     private val green = Color.parseColor("#4ADE80")
     private val red = Color.parseColor("#F87171")
@@ -112,73 +118,78 @@ class OverlayPanel(
 
     private fun build(ev: Evaluation, rules: Rules): View {
         val o = ev.offer
-        val radius = dp(22).toFloat()
+        val radius = dp(18).toFloat()
         val root = LinearLayout(service).apply {
             orientation = LinearLayout.VERTICAL
-            background = rounded(Color.parseColor("#F5111827"), 22)
+            background = rounded(Color.parseColor("#F5111827"), 18)
             clipToOutline = true
             elevation = dp(8).toFloat()
         }
 
-        // 1. Franja de color: veredicto + valor por km en grande
+        // 1. Franja de color: veredicto a la izquierda, valor por km a la derecha (una sola línea)
         val header = LinearLayout(service).apply {
             orientation = LinearLayout.VERTICAL
-            gravity = Gravity.CENTER_HORIZONTAL
-            setPadding(dp(8), dp(10), dp(8), dp(12))
+            setPadding(dp(12), dp(6), dp(12), dp(6))
             background = GradientDrawable().apply {
                 setColor(Color.parseColor(if (ev.profitable) "#16A34A" else "#DC2626"))
                 cornerRadii = floatArrayOf(radius, radius, radius, radius, 0f, 0f, 0f, 0f)
             }
         }
-        header.addView(text(if (ev.profitable) "✅ RENTABLE" else "❌ NO RENTABLE", 30f, white, bold = true).apply {
+        val top = LinearLayout(service).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+        }
+        top.addView(text(if (ev.profitable) "✅ RENTABLE" else "❌ NO RENTABLE", 20f, white, bold = true).apply {
             maxLines = 1
-        })
-        header.addView(text("", 50f, white, bold = true).apply {
+            gravity = Gravity.START or Gravity.CENTER_VERTICAL
+        }, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
+        top.addView(text("", 34f, white, bold = true).apply {
             val main = Money.clp(ev.perKm)
             text = SpannableString("$main/km").apply {
                 setSpan(RelativeSizeSpan(0.5f), main.length, length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
             }
             includeFontPadding = false
+            maxLines = 1
         })
-        if (!ev.paymentOk) {
-            // Solo tarjeta: el motivo va en grande, debajo del $/km.
-            val why = if (o.payment == Payment.CASH) "💵 PAGO EN EFECTIVO" else "⚠️ NO SE VE PAGO CON TARJETA"
-            header.addView(text(why, 18f, white, bold = true).apply { maxLines = 1 })
-        } else {
-            val pay = if (o.payment == Payment.CARD) "💳 Tarjeta · " else ""
-            val sub = if (ev.perKmOk) "${pay}mínimo ${Money.clp(rules.minPerKm)}/km"
-            else "${pay}faltan ${Money.clp(rules.minPerKm * o.distanceKm - o.price)} para llegar a ${Money.clp(rules.minPerKm)}/km"
-            header.addView(text(sub, 14f, white).apply { alpha = 0.92f; maxLines = 1 })
+        header.addView(top)
+
+        val sub = when {
+            !ev.paymentOk -> if (o.payment == Payment.CASH) "💵 PAGO EN EFECTIVO" else "⚠️ NO SE VE PAGO CON TARJETA"
+            else -> {
+                val pay = if (o.payment == Payment.CARD) "💳 Tarjeta · " else ""
+                val net = if (rules.costPerKm > 0) " · te quedan ${Money.clp(ev.net)}" else ""
+                if (ev.perKmOk) "${pay}mínimo ${Money.clp(rules.minPerKm)}/km$net"
+                else "${pay}faltan ${Money.clp(rules.minPerKm * o.distanceKm - o.price)} para ${Money.clp(rules.minPerKm)}/km$net"
+            }
         }
+        header.addView(text(sub, if (ev.paymentOk) 12f else 15f, white, bold = !ev.paymentOk).apply {
+            alpha = 0.95f; maxLines = 1
+            gravity = Gravity.START
+        })
         root.addView(header)
 
-        // 2. Cuatro cuadros con los datos de la carrera
+        // 2. Una sola fila con los cuatro datos: valor grande arriba, etiqueta chica abajo
         val hourColor = when {
             ev.perHour == null -> muted
             rules.minPerHour <= 0 -> white
             ev.perHourOk -> green
             else -> red
         }
-        val legsHint = if (o.legs.size >= 2) o.legs.joinToString(" + ") { Money.decimal(it.km) } + " km" else null
-        val netHint = if (rules.costPerKm > 0) "te quedan ${Money.clp(ev.net)}" else null
-
-        val grid = LinearLayout(service).apply {
-            orientation = LinearLayout.VERTICAL
-            setPadding(dp(10), dp(4), dp(10), 0)
+        val row = LinearLayout(service).apply {
+            orientation = LinearLayout.HORIZONTAL
+            setPadding(dp(8), dp(6), dp(8), dp(8))
         }
-        grid.addView(row(
-            cell("PAGAN", Money.clp(o.price), white, netHint),
-            cell("POR HORA", ev.perHour?.let { Money.clp(it) } ?: "sin dato", hourColor),
-        ))
-        grid.addView(row(
-            cell("KM A MANEJAR", "${Money.decimal(o.distanceKm)} km", white, legsHint),
-            cell("MINUTOS", o.durationMin?.let { "${Math.round(it)} min" } ?: "sin dato", white),
-        ))
-        root.addView(grid)
-
-        root.addView(text("toca para cerrar · arrastra para mover", 11f, muted).apply {
-            setPadding(0, dp(6), 0, dp(8))
-        })
+        listOf(
+            cell(Money.clp(o.price), "PAGAN", white),
+            cell(ev.perHour?.let { Money.clp(it) } ?: "—", "POR HORA", hourColor),
+            cell("${Money.decimal(o.distanceKm)} km", "KM", white),
+            cell(o.durationMin?.let { "${Math.round(it)} min" } ?: "—", "MINUTOS", white),
+        ).forEachIndexed { i, c ->
+            row.addView(c, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f).apply {
+                if (i > 0) marginStart = dp(6)
+            })
+        }
+        root.addView(row)
         return root
     }
 
@@ -190,29 +201,20 @@ class OverlayPanel(
         if (bold) typeface = Typeface.DEFAULT_BOLD
     }
 
-    private fun row(vararg cells: View) = LinearLayout(service).apply {
-        orientation = LinearLayout.HORIZONTAL
-        setPadding(0, dp(6), 0, 0)
-        cells.forEachIndexed { i, c ->
-            addView(c, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.MATCH_PARENT, 1f).apply {
-                if (i > 0) marginStart = dp(8)
-            })
-        }
-    }
-
-    private fun cell(label: String, value: String, color: Int, hint: String? = null) =
+    private fun cell(value: String, label: String, color: Int) =
         LinearLayout(service).apply {
             orientation = LinearLayout.VERTICAL
-            background = rounded(Color.parseColor("#1F2937"), 12)
-            setPadding(dp(10), dp(6), dp(10), dp(8))
+            gravity = Gravity.CENTER_HORIZONTAL
+            background = rounded(Color.parseColor("#1F2937"), 10)
+            setPadding(dp(4), dp(4), dp(4), dp(4))
             addView(TextView(service).apply {
-                text = label; setTextColor(muted); textSize = 13f; typeface = Typeface.DEFAULT_BOLD
+                text = value; setTextColor(color); textSize = 17f; typeface = Typeface.DEFAULT_BOLD
+                maxLines = 1; gravity = Gravity.CENTER
             })
             addView(TextView(service).apply {
-                text = value; setTextColor(color); textSize = 28f; typeface = Typeface.DEFAULT_BOLD
-                maxLines = 1
+                text = label; setTextColor(muted); textSize = 10f; typeface = Typeface.DEFAULT_BOLD
+                maxLines = 1; gravity = Gravity.CENTER
             })
-            if (hint != null) addView(TextView(service).apply { text = hint; setTextColor(muted); textSize = 12f })
         }
 
     private fun rounded(color: Int, radiusDp: Int) = GradientDrawable().apply {

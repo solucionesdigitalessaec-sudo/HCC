@@ -7,7 +7,8 @@ data class ScreenLine(val text: String, val top: Int, val bottom: Int)
 object ScreenFilter {
 
     private val PANEL_TOP = Regex("""\bRENTABLE\b""", RegexOption.IGNORE_CASE)
-    private val PANEL_BOTTOM = Regex("""toca para cerrar|arrastra para mover""", RegexOption.IGNORE_CASE)
+    /** Lo más bajo del panel: la fila de etiquetas ("PAGAN  POR HORA  KM  MINUTOS"). */
+    private val PANEL_BOTTOM = Regex("""POR HORA|(?i:toca para cerrar|arrastra para mover)""")
     /**
      * Textos que solo existen en nuestro panel (en MAYÚSCULAS, como se dibujan). Si quedan después
      * de filtrar, la captura no sirve. Se distingue mayúscula/minúscula para no confundirlos con

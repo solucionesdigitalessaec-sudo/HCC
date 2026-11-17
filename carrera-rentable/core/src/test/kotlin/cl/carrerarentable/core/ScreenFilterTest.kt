@@ -68,6 +68,23 @@ class ScreenFilterTest {
     }
 
     @Test
+    fun compactPanelIsRemoved() {
+        // Panel compacto arriba y la lista de Cabify abajo.
+        val screen = listOf(
+            l("X NO RENTABLE $428/km", 100), l("faltan $2.445 para $700/km", 140),
+            l("$3.855", 180), l("$7.461", 180), l("9,0 km", 180), l("31 min", 180),
+            l("PAGAN", 205), l("POR HORA", 205), l("KM", 205), l("MINUTOS", 205),
+            l("Cabify", 500), l("$ 3.855 para ti", 540), l("14 min · 4 km", 600), l("17 min · 5 km", 700),
+        )
+        val cleaned = ScreenFilter.removeOwnPanel(screen)
+        assertNotNull(cleaned)
+        assertEquals("Cabify", cleaned.first().text)
+        val o = OfferParser.parseRequest(cleaned.map { it.text })
+        assertNotNull(o)
+        assertEquals(3855.0, o.price)
+    }
+
+    @Test
     fun acceptButtonIsRequired() {
         assertTrue(ScreenFilter.hasAcceptButton(listOf("$1.847", "Toca para aceptar la solicitud.")))
         assertTrue(ScreenFilter.hasAcceptButton(listOf("Aceptar")))
