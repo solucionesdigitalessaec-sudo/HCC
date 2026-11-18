@@ -5,10 +5,13 @@ import android.os.SystemClock
 import android.os.VibrationEffect
 import android.os.Vibrator
 import android.provider.Settings
+import cl.carrerarentable.core.Ledger
 import cl.carrerarentable.core.OfferParser
 import cl.carrerarentable.core.Payment
 import cl.carrerarentable.core.ProfitCalculator
+import cl.carrerarentable.core.RideAppGuess
 import cl.carrerarentable.core.RideOffer
+import cl.carrerarentable.core.TripStateDetector
 
 /**
  * Recibe el texto reconocido en cada captura de pantalla (ver ShiftService), decide si hay una
@@ -27,6 +30,12 @@ object OfferController {
     private var shownPrice: Double? = null
     /** Tarifa de la solicitud cuyo panel cerró el conductor (no se vuelve a mostrar mientras siga en pantalla). */
     private var dismissedPrice: Double? = null
+
+    /** Última solicitud vista: si después aparece la pantalla de "ir a buscar al pasajero", se anota. */
+    private class Candidate(val offer: RideOffer, val app: String, val signature: String, var lastSeen: Long, var logged: Boolean = false)
+    private var candidate: Candidate? = null
+    /** Cuánto tiempo después de ver la solicitud se acepta la pantalla de recogida como "la aceptó". */
+    private const val ACCEPT_WINDOW_MS = 90_000L
 
     private fun panel(c: Context): OverlayPanel {
         if (!::app.isInitialized) app = c.applicationContext
@@ -53,10 +62,12 @@ object OfferController {
         val offer = if (lines.isEmpty()) null else OfferParser.parseRequest(lines)
         if (offer == null) {
             pendingSignature = null
+            checkAccepted(c, lines)
             handleOffer(c, null, lines)
             return false
         }
         val signature = signatureOf(offer)
+        rememberCandidate(offer, lines, signature)
         val alreadyShown = signature == lastSignature && p.isShowing
         if (!alreadyShown && signature != pendingSignature) {
             pendingSignature = signature
@@ -69,6 +80,30 @@ object OfferController {
     }
 
     private fun signatureOf(o: RideOffer) = "${o.price}|${o.distanceKm}|${o.durationMin}"
+
+    private fun rememberCandidate(offer: RideOffer, lines: List<String>, signature: String) {
+        val now = SystemClock.elapsedRealtime()
+        val cur = candidate
+        // Se compara la tarifa (minutos y km pueden leerse un poco distinto entre capturas).
+        if (cur != null && kotlin.math.abs(cur.offer.price - offer.price) < 1.0) {
+            cur.lastSeen = now
+        } else {
+            candidate = Candidate(offer, RideAppGuess.from(lines), signature, now)
+        }
+    }
+
+    /** Si justo después de una solicitud aparece la pantalla de recogida, se anota en la bitácora. */
+    private fun checkAccepted(c: Context, lines: List<String>) {
+        val cand = candidate ?: return
+        val now = SystemClock.elapsedRealtime()
+        if (now - cand.lastSeen > ACCEPT_WINDOW_MS) { candidate = null; return }
+        if (cand.logged || !SettingsStore.autoLog(c)) return
+        if (!TripStateDetector.looksAccepted(lines)) return
+        cand.logged = true
+        val trip = Ledger.tripFromOffer(cand.offer, cand.app, System.currentTimeMillis())
+        Thread { TripLog.get(c).add(trip) }.start()
+        Diag.ocr(c, "carrera anotada en la bitácora: ${cand.app} ${cl.carrerarentable.core.Money.clp(trip.price)}", lines)
+    }
 
     private fun handleOffer(c: Context, offer: RideOffer?, lines: List<String>) {
         val p = panel(c)

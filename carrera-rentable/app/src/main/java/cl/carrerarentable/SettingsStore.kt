@@ -2,6 +2,7 @@ package cl.carrerarentable
 
 import android.content.Context
 import cl.carrerarentable.core.Rules
+import cl.carrerarentable.core.Vehicle
 
 /** Preferencias guardadas en el teléfono. */
 object SettingsStore {
@@ -9,19 +10,41 @@ object SettingsStore {
 
     private fun prefs(c: Context) = c.getSharedPreferences(FILE, Context.MODE_PRIVATE)
 
+    /** Reglas del panel. El costo por km sale de los datos del auto. */
     fun rules(c: Context) = Rules(
         minPerKm = prefs(c).getFloat("min_km", 700f).toDouble(),
         minPerHour = prefs(c).getFloat("min_hora", 0f).toDouble(),
-        costPerKm = prefs(c).getFloat("costo_km", 0f).toDouble(),
+        costPerKm = vehicle(c).costPerKm,
+        retentionPct = retentionPct(c),
         cardOnly = prefs(c).getBoolean("solo_tarjeta", true),
     )
 
     fun saveRules(c: Context, r: Rules) = prefs(c).edit()
         .putFloat("min_km", r.minPerKm.toFloat())
         .putFloat("min_hora", r.minPerHour.toFloat())
-        .putFloat("costo_km", r.costPerKm.toFloat())
         .putBoolean("solo_tarjeta", r.cardOnly)
         .apply()
+
+    /** Datos del auto (por defecto: diésel a $1.591 y 9,6 km/l). */
+    fun vehicle(c: Context) = Vehicle(
+        fuelPricePerLiter = prefs(c).getFloat("combustible_litro", 1591f).toDouble(),
+        kmPerLiter = prefs(c).getFloat("km_por_litro", 9.6f).toDouble(),
+        otherCostPerKm = prefs(c).getFloat("otros_costos_km", 0f).toDouble(),
+    )
+
+    fun saveVehicle(c: Context, v: Vehicle) = prefs(c).edit()
+        .putFloat("combustible_litro", v.fuelPricePerLiter.toFloat())
+        .putFloat("km_por_litro", v.kmPerLiter.toFloat())
+        .putFloat("otros_costos_km", v.otherCostPerKm.toFloat())
+        .apply()
+
+    /** Retención de impuestos (boleta de honorarios): 15,25% en 2026. */
+    fun retentionPct(c: Context) = prefs(c).getFloat("retencion_pct", 15.25f).toDouble()
+    fun setRetentionPct(c: Context, v: Double) = prefs(c).edit().putFloat("retencion_pct", v.toFloat()).apply()
+
+    /** Anotar sola en la bitácora la carrera aceptada. */
+    fun autoLog(c: Context) = prefs(c).getBoolean("bitacora_auto", true)
+    fun setAutoLog(c: Context, v: Boolean) = prefs(c).edit().putBoolean("bitacora_auto", v).apply()
 
     /** Segundos antes de ocultar el panel solo. 0 (por defecto) = queda hasta que lo toques. */
     fun hideSeconds(c: Context) = prefs(c).getInt("ocultar_seg_v2", 0)

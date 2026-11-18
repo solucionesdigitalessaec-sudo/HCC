@@ -50,8 +50,13 @@ class ShiftService : Service() {
     private var scale = 1f
     private var lastDiag = 0L
 
+    /** Turno en la bitácora (para el $/hora real). Su fin se actualiza cada minuto. */
+    private var shiftId = -1L
+    private var ticks = 0
+
     private val tick = object : Runnable {
         override fun run() {
+            if (shiftId > 0 && ++ticks % 60 == 0) TripLog.get(this@ShiftService).touchShift(shiftId, System.currentTimeMillis())
             captureOnce()
             workerHandler.postDelayed(this, INTERVAL_MS)
         }
@@ -94,6 +99,7 @@ class ShiftService : Service() {
         startCapture(mp)
         running = true
         Diag.ocr(this, "Turno iniciado")
+        workerHandler.post { shiftId = TripLog.get(this).startShift(System.currentTimeMillis()) }
         workerHandler.postDelayed(tick, 800)
         return START_NOT_STICKY
     }
@@ -206,6 +212,7 @@ class ShiftService : Service() {
 
     override fun onDestroy() {
         running = false
+        if (shiftId > 0) runCatching { TripLog.get(this).touchShift(shiftId, System.currentTimeMillis()) }
         OfferController.hide()
         handler.removeCallbacksAndMessages(null)
         workerHandler.removeCallbacksAndMessages(null)

@@ -37,7 +37,10 @@ Cuando te llega una solicitud de viaje, KMRentable lee la tarifa, los kilómetro
 • Kilómetros totales a manejar y minutos
 • Veredicto claro: ✅ RENTABLE o ❌ NO RENTABLE según tu mínimo por km
 
-Tú decides tus reglas: mínimo por km, mínimo por hora, tu costo por km (bencina y desgaste) y si solo quieres carreras pagadas con tarjeta.
+Tú decides tus reglas: mínimo por km, mínimo por hora y si solo quieres carreras pagadas con tarjeta.
+
+BITÁCORA Y GANANCIA REAL
+Cada carrera que aceptas queda anotada sola. KMRentable descuenta el combustible (según el precio del litro y el rendimiento de tu auto, contando también los km de recogida) y la retención de impuestos, y te muestra tu ganancia real del día, la semana y el mes, con tu $/km y $/hora reales. Puedes corregir carreras, agregarlas a mano y exportar todo a Excel.
 
 CÓMO FUNCIONA
 1. Abre KMRentable y empieza tu turno (Android te pide permiso para leer la pantalla).

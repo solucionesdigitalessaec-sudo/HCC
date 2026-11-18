@@ -5,8 +5,10 @@ data class Rules(
     val minPerKm: Double = 700.0,
     /** Mínimo por hora; 0 = no se exige. */
     val minPerHour: Double = 0.0,
-    /** Costo propio por km (bencina, desgaste...); 0 = no se descuenta. */
+    /** Costo propio por km (combustible, desgaste...); 0 = no se descuenta. */
     val costPerKm: Double = 0.0,
+    /** Retención de impuestos (% del monto, boleta de honorarios: 15,25% en 2026); 0 = no se descuenta. */
+    val retentionPct: Double = 0.0,
     /** Solo carreras pagadas con tarjeta: efectivo o pago no visible = no rentable. */
     val cardOnly: Boolean = true,
 )
@@ -28,7 +30,8 @@ object ProfitCalculator {
         val perKm = offer.price / offer.distanceKm
         val hours = offer.durationMin?.let { it / 60.0 }
         val perHour = hours?.let { offer.price / it }
-        val net = offer.price - rules.costPerKm * offer.distanceKm
+        // "Te quedan": monto - retención de impuestos - costos por km (recogida + viaje).
+        val net = offer.price * (1 - rules.retentionPct / 100.0) - rules.costPerKm * offer.distanceKm
         val netPerHour = hours?.let { net / it }
 
         val perKmOk = perKm >= rules.minPerKm

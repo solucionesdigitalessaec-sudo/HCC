@@ -25,11 +25,16 @@ import cl.carrerarentable.core.Rules
 class MainActivity : Activity() {
 
     private lateinit var setupBox: LinearLayout
+    private lateinit var logButton: Button
     /** Ofrecer empezar el turno apenas se abre la app (solo la primera vez que se muestra). */
     private var autoStart = false
     private lateinit var minKm: EditText
     private lateinit var minHour: EditText
-    private lateinit var costKm: EditText
+    private lateinit var fuelPrice: EditText
+    private lateinit var kmPerLiter: EditText
+    private lateinit var otherCost: EditText
+    private lateinit var retention: EditText
+    private lateinit var autoLog: CheckBox
     private lateinit var hideSec: EditText
     private lateinit var vibrate: CheckBox
     private lateinit var cardOnly: CheckBox
@@ -102,6 +107,10 @@ class MainActivity : Activity() {
             minHeight = dp(64)
         }
         col.addView(shiftButton)
+        logButton = button("📒 Bitácora y ganancias") {
+            startActivity(Intent(this, LogActivity::class.java))
+        }.apply { textSize = 17f; minHeight = dp(56); isAllCaps = false }
+        col.addView(logButton)
         col.addView(note(
             "Al empezar, Android pregunta si permites grabar la pantalla: elige \"Pantalla completa\" y toca " +
                 "\"Empezar\". Android lo pregunta en cada turno; no se puede guardar. Luego abre Uber, Cabify o DiDi."
@@ -112,7 +121,6 @@ class MainActivity : Activity() {
         val r = SettingsStore.rules(this)
         minKm = field(col, "Mínimo por km ($)", r.minPerKm)
         minHour = field(col, "Mínimo por hora ($) · 0 = no exigir", r.minPerHour)
-        costKm = field(col, "Mi costo por km ($, bencina + desgaste) · 0 = no descontar", r.costPerKm)
         cardOnly = CheckBox(this).apply {
             text = "Solo carreras con tarjeta (efectivo = NO RENTABLE). En Cabify no se exige: ahí desactivas el efectivo."
             isChecked = r.cardOnly
@@ -134,6 +142,20 @@ class MainActivity : Activity() {
             saveRules()
             Toast.makeText(this, "Reglas guardadas", Toast.LENGTH_SHORT).show()
         })
+
+        // Auto y descuentos (para "te quedan" en el panel y la ganancia real de la bitácora)
+        col.addView(title("Mi auto y descuentos"))
+        val v = SettingsStore.vehicle(this)
+        fuelPrice = field(col, "Precio del combustible por litro ($)", v.fuelPricePerLiter)
+        kmPerLiter = field(col, "Rendimiento (km por litro)", v.kmPerLiter)
+        otherCost = field(col, "Otros costos por km ($, desgaste, mantención) · 0 = no descontar", v.otherCostPerKm)
+        retention = field(col, "Retención de impuestos (%) · 15,25 en 2026", SettingsStore.retentionPct(this))
+        autoLog = CheckBox(this).apply {
+            text = "Anotar sola en la bitácora cada carrera que acepto"
+            isChecked = SettingsStore.autoLog(this@MainActivity)
+        }
+        col.addView(autoLog)
+        col.addView(note("La comisión de la app ya viene descontada en el monto de la solicitud (\"para ti\" / \"tus ganancias\")."))
 
         // 3. Calculadora manual
         col.addView(title("3. Calcular a mano"))
@@ -167,12 +189,33 @@ class MainActivity : Activity() {
         refreshSetup()
         diag.text = Diag.report(this)
         refreshShift()
+        refreshTodayNet()
         // Al abrir la app, si todo está configurado, se ofrece empezar el turno de inmediato.
         if (autoStart && OfferController.canDraw(this) && !ShiftService.running) {
             autoStart = false
             startShift()
         }
         autoStart = false
+    }
+
+    /** Ganancia real de hoy en el botón de la bitácora. */
+    private fun refreshTodayNet() {
+        Thread {
+            val c = java.util.Calendar.getInstance().apply {
+                set(java.util.Calendar.HOUR_OF_DAY, 0); set(java.util.Calendar.MINUTE, 0)
+                set(java.util.Calendar.SECOND, 0); set(java.util.Calendar.MILLISECOND, 0)
+            }
+            val from = c.timeInMillis
+            val log = TripLog.get(this)
+            val s = cl.carrerarentable.core.Ledger.summarize(
+                log.trips(from, from + 86_400_000L), SettingsStore.vehicle(this), SettingsStore.retentionPct(this),
+                log.shiftMinutes(from, from + 86_400_000L),
+            )
+            runOnUiThread {
+                logButton.text = if (s.trips == 0) "📒 Bitácora y ganancias"
+                else "📒 Bitácora · hoy ${Money.clp(s.net)} real (${s.trips} carreras)"
+            }
+        }.start()
     }
 
     /** Pasos de configuración con su estado (✅ listo / botón para hacerlo). */
@@ -318,7 +361,14 @@ class MainActivity : Activity() {
     }
 
     private fun saveRules() {
-        SettingsStore.saveRules(this, Rules(num(minKm) ?: 700.0, num(minHour) ?: 0.0, num(costKm) ?: 0.0, cardOnly.isChecked))
+        SettingsStore.saveRules(this, Rules(minPerKm = num(minKm) ?: 700.0, minPerHour = num(minHour) ?: 0.0, cardOnly = cardOnly.isChecked))
+        SettingsStore.saveVehicle(this, cl.carrerarentable.core.Vehicle(
+            fuelPricePerLiter = num(fuelPrice) ?: 1591.0,
+            kmPerLiter = num(kmPerLiter)?.takeIf { it > 0 } ?: 9.6,
+            otherCostPerKm = num(otherCost) ?: 0.0,
+        ))
+        SettingsStore.setRetentionPct(this, num(retention) ?: 15.25)
+        SettingsStore.setAutoLog(this, autoLog.isChecked)
         SettingsStore.setHideSeconds(this, (num(hideSec) ?: 0.0).toInt())
         SettingsStore.setVibrate(this, vibrate.isChecked)
         SettingsStore.setSound(this, sound.isChecked)
@@ -341,7 +391,7 @@ class MainActivity : Activity() {
             appendLine(if (ev.profitable) "✅ RENTABLE" else "❌ NO RENTABLE")
             appendLine("Valor km: ${Money.clp(ev.perKm)}/km (mínimo ${Money.clp(rules.minPerKm)})")
             ev.perHour?.let { appendLine("Por hora: ${Money.clp(it)}/h") }
-            if (rules.costPerKm > 0) appendLine("Te queda: ${Money.clp(ev.net)}")
+            if (rules.costPerKm > 0 || rules.retentionPct > 0) appendLine("Te queda (descontando combustible y retención): ${Money.clp(ev.net)}")
             if (!ev.perKmOk) append("Para ser rentable debería pagar ${Money.clp(rules.minPerKm * km)}")
         }
     }
