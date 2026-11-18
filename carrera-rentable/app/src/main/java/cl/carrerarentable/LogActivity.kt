@@ -33,6 +33,9 @@ class LogActivity : Activity() {
 
     private var period = Period.HOY
     private lateinit var tabs: LinearLayout
+    private lateinit var appTabs: LinearLayout
+    /** Empresa elegida: null = todas. */
+    private var appFilter: String? = null
     private lateinit var totals: LinearLayout
     private lateinit var summaryBox: LinearLayout
     private lateinit var listBox: LinearLayout
@@ -80,6 +83,9 @@ class LogActivity : Activity() {
 
         // Ganancia real de hoy, la semana y el mes, siempre a la vista.
         totals = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; setPadding(0, 0, 0, dp(10)) }
+        // Empresa: Todas / Uber / Cabify / DiDi
+        appTabs = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; setPadding(0, 0, 0, dp(10)) }
+        col.addView(appTabs)
         col.addView(totals)
         col.addView(note("Detalle de:"))
         tabs = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; setPadding(0, dp(4), 0, dp(10)) }
@@ -182,32 +188,44 @@ class LogActivity : Activity() {
         return c.timeInMillis to end
     }
 
+    private fun chip(label: String, selected: Boolean, onClick: () -> Unit) = Button(this).apply {
+        text = label
+        isAllCaps = false
+        typeface = if (selected) Typeface.DEFAULT_BOLD else Typeface.DEFAULT
+        setTextColor(if (selected) Color.WHITE else Color.parseColor("#111827"))
+        background = GradientDrawable().apply {
+            setColor(Color.parseColor(if (selected) "#16A34A" else "#E5E7EB")); cornerRadius = dp(10).toFloat()
+        }
+        setOnClickListener { onClick() }
+    }
+
+    private fun filterApp(trips: List<Trip>) = appFilter?.let { a -> trips.filter { it.app.equals(a, ignoreCase = true) } } ?: trips
+
     private fun refresh() {
+        appTabs.removeAllViews()
+        (listOf<String?>(null) + APPS).forEachIndexed { i, a ->
+            appTabs.addView(chip(a ?: "Todas", a == appFilter) { appFilter = a; refresh() },
+                LinearLayout.LayoutParams(0, -2, 1f).apply { if (i > 0) marginStart = dp(6) })
+        }
         tabs.removeAllViews()
         Period.values().forEachIndexed { i, p ->
-            tabs.addView(Button(this).apply {
-                text = p.label
-                isAllCaps = false
-                typeface = if (p == period) Typeface.DEFAULT_BOLD else Typeface.DEFAULT
-                setTextColor(if (p == period) Color.WHITE else Color.parseColor("#111827"))
-                background = GradientDrawable().apply {
-                    setColor(Color.parseColor(if (p == period) "#16A34A" else "#E5E7EB")); cornerRadius = dp(10).toFloat()
-                }
-                setOnClickListener { period = p; refresh() }
-            }, LinearLayout.LayoutParams(0, -2, 1f).apply { if (i > 0) marginStart = dp(6) })
+            tabs.addView(chip(p.label, p == period) { period = p; refresh() },
+                LinearLayout.LayoutParams(0, -2, 1f).apply { if (i > 0) marginStart = dp(6) })
         }
 
         val (from, to) = range(period)
         Thread {
-            val trips = log.trips(from, to)
-            val shiftMin = log.shiftMinutes(from, to)
+            val periodTrips = log.trips(from, to)
+            // Las horas de turno no se pueden separar por empresa: solo cuentan en "Todas".
+            val shiftMin = if (appFilter == null) log.shiftMinutes(from, to) else 0.0
             val vehicle = SettingsStore.vehicle(this)
             val ret = SettingsStore.retentionPct(this)
             val all = Period.values().map { p ->
                 val (f, t) = range(p)
-                p to Ledger.summarize(log.trips(f, t), vehicle, ret, log.shiftMinutes(f, t))
+                p to Ledger.summarize(filterApp(log.trips(f, t)), vehicle, ret,
+                    if (appFilter == null) log.shiftMinutes(f, t) else 0.0)
             }
-            runOnUiThread { showTotals(all); show(trips, shiftMin) }
+            runOnUiThread { showTotals(all); show(periodTrips, shiftMin) }
         }.start()
     }
 
@@ -235,30 +253,35 @@ class LogActivity : Activity() {
         }
     }
 
-    private fun show(trips: List<Trip>, shiftMinutes: Double) {
+    private fun show(periodTrips: List<Trip>, shiftMinutes: Double) {
+        val trips = filterApp(periodTrips)
         shown = trips
         val vehicle = SettingsStore.vehicle(this)
         val ret = SettingsStore.retentionPct(this)
         val s = Ledger.summarize(trips, vehicle, ret, shiftMinutes)
         summaryBox.removeAllViews()
-        summaryBox.addView(summaryCard(s))
+        // En "Todas": ganancia real de cada empresa por separado.
+        val byApp = if (appFilter == null) periodTrips.groupBy { it.app }
+            .map { (a, l) -> a to Ledger.summarize(l, vehicle, ret, 0.0) }
+            .sortedByDescending { it.second.net } else emptyList()
+        summaryBox.addView(summaryCard(s, byApp))
 
         listBox.removeAllViews()
         if (trips.isEmpty()) {
-            listBox.addView(note("Todavía no hay carreras en este período."))
+            listBox.addView(note("Todavía no hay carreras" + (appFilter?.let { " de $it" } ?: "") + " en este período."))
             return
         }
         trips.forEach { t -> listBox.addView(tripRow(t, Ledger.earnings(t, vehicle, ret).net)) }
     }
 
-    private fun summaryCard(s: Summary): View = LinearLayout(this).apply {
+    private fun summaryCard(s: Summary, byApp: List<Pair<String, Summary>>): View = LinearLayout(this).apply {
         orientation = LinearLayout.VERTICAL
         setPadding(dp(14), dp(12), dp(14), dp(12))
         background = GradientDrawable().apply { setColor(Color.parseColor("#111827")); cornerRadius = dp(14).toFloat() }
         (layoutParams as? LinearLayout.LayoutParams)?.topMargin = dp(10)
 
         addView(TextView(context).apply {
-            text = "GANANCIA REAL"; textSize = 12f; typeface = Typeface.DEFAULT_BOLD; setTextColor(Color.parseColor("#9CA3AF"))
+            text = "GANANCIA REAL · ${(appFilter ?: "todas las empresas").uppercase()}"; textSize = 12f; typeface = Typeface.DEFAULT_BOLD; setTextColor(Color.parseColor("#9CA3AF"))
         })
         addView(TextView(context).apply {
             text = Money.clp(s.net); textSize = 34f; typeface = Typeface.DEFAULT_BOLD
@@ -275,7 +298,9 @@ class LogActivity : Activity() {
             "Retención de impuestos" to "−" + Money.clp(s.retention),
             "Combustible" to "−" + Money.clp(s.fuel),
         ) + (if (s.otherCosts > 0) listOf("Otros costos" to "−" + Money.clp(s.otherCosts)) else emptyList()) + listOf(
+        ) + (if (appFilter == null) listOf(
             "Horas de turno" to (if (s.shiftMinutes > 0) "${Money.decimal(s.shiftMinutes / 60.0)} h" else "—"),
+        ) else emptyList()) + listOf(
             "Antes de retención" to Money.clp(s.net + s.retention),
         )
         lines.forEach { (k, v) ->
@@ -286,6 +311,26 @@ class LogActivity : Activity() {
                     LinearLayout.LayoutParams(0, -2, 1f))
                 addView(TextView(context).apply { text = v; textSize = 14f; typeface = Typeface.DEFAULT_BOLD; setTextColor(Color.WHITE) })
             })
+        }
+        if (byApp.size > 1) {
+            addView(TextView(context).apply {
+                text = "POR EMPRESA"; textSize = 12f; typeface = Typeface.DEFAULT_BOLD
+                setTextColor(Color.parseColor("#9CA3AF")); setPadding(0, dp(10), 0, 0)
+            })
+            byApp.forEach { (a, sa) ->
+                addView(LinearLayout(context).apply {
+                    orientation = LinearLayout.HORIZONTAL
+                    setPadding(0, dp(4), 0, 0)
+                    addView(TextView(context).apply {
+                        text = "$a · ${sa.trips} carreras" + (sa.netPerKm?.let { " · ${Money.clp(it)}/km" } ?: "")
+                        textSize = 14f; setTextColor(Color.parseColor("#D1D5DB"))
+                    }, LinearLayout.LayoutParams(0, -2, 1f))
+                    addView(TextView(context).apply {
+                        text = Money.clp(sa.net); textSize = 14f; typeface = Typeface.DEFAULT_BOLD
+                        setTextColor(Color.parseColor(if (sa.net >= 0) "#4ADE80" else "#F87171"))
+                    })
+                })
+            }
         }
         addView(TextView(context).apply {
             text = "La retención (${Money.decimal(SettingsStore.retentionPct(this@LogActivity), 2)}%) es un pago adelantado de impuestos: " +
@@ -333,9 +378,18 @@ class LogActivity : Activity() {
             }
         }
         fun txt(v: Double?) = v?.let { if (it % 1.0 == 0.0) it.toLong().toString() else Money.decimal(it) } ?: ""
-        val app = EditText(this).apply { setText(t?.app ?: "Cabify") }
-        form.addView(TextView(this).apply { text = "App (Uber, Cabify, DiDi...)" })
-        form.addView(app)
+        var chosenApp = t?.app ?: appFilter ?: "Cabify"
+        form.addView(TextView(this).apply { text = "Empresa" })
+        val appRow = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+        fun paintApps() {
+            appRow.removeAllViews()
+            APPS.forEachIndexed { i, a ->
+                appRow.addView(chip(a, a.equals(chosenApp, true)) { chosenApp = a; paintApps() },
+                    LinearLayout.LayoutParams(0, -2, 1f).apply { if (i > 0) marginStart = dp(4) })
+            }
+        }
+        paintApps()
+        form.addView(appRow)
         val whenFmt = SimpleDateFormat("dd/MM/yyyy HH:mm", Locale.ROOT)
         form.addView(TextView(this).apply { text = "Fecha y hora (dd/mm/aaaa hh:mm)"; setPadding(0, dp(8), 0, 0) })
         val whenInput = EditText(this).apply {
@@ -362,7 +416,7 @@ class LogActivity : Activity() {
                 }
                 val trip = Trip(
                     id = t?.id ?: 0, time = time,
-                    app = app.text.toString().trim().ifBlank { "Otra" }, price = p,
+                    app = chosenApp, price = p,
                     pickupKm = num(pickup.text.toString()) ?: 0.0, tripKm = num(ride.text.toString()) ?: 0.0,
                     minutes = num(minutes.text.toString()), source = t?.source ?: "manual",
                 )
@@ -383,7 +437,7 @@ class LogActivity : Activity() {
         if (shown.isEmpty()) {
             Toast.makeText(this, "No hay carreras en este período", Toast.LENGTH_SHORT).show(); return
         }
-        val name = "kmrentable-${period.label.lowercase()}-${SimpleDateFormat("yyyy-MM-dd", Locale.ROOT).format(Date())}.csv"
+        val name = "kmrentable-${(appFilter ?: "todas").lowercase()}-${period.label.lowercase()}-${SimpleDateFormat("yyyy-MM-dd", Locale.ROOT).format(Date())}.csv"
         val i = Intent(Intent.ACTION_CREATE_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE)
             .setType("text/csv").putExtra(Intent.EXTRA_TITLE, name)
         @Suppress("DEPRECATION")
@@ -436,6 +490,7 @@ class LogActivity : Activity() {
 
     companion object {
         private const val REQ_EXPORT = 51
+        private val APPS = listOf("Uber", "Cabify", "DiDi")
         private const val REQ_CAPTURE = 52
     }
 }
