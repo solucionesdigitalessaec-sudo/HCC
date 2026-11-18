@@ -36,6 +36,7 @@ class LogActivity : Activity() {
     private lateinit var totals: LinearLayout
     private lateinit var summaryBox: LinearLayout
     private lateinit var listBox: LinearLayout
+    private lateinit var importButton: Button
     private var shown: List<Trip> = emptyList()
 
     private val log by lazy { TripLog.get(this) }
@@ -90,6 +91,8 @@ class LogActivity : Activity() {
         actions.addView(button("+ Agregar carrera") { editTrip(null) }, LinearLayout.LayoutParams(0, -2, 1f))
         actions.addView(button("Exportar a Excel") { exportCsv() }, LinearLayout.LayoutParams(0, -2, 1f).apply { marginStart = dp(8) })
         col.addView(actions)
+        importButton = button("") { toggleImport() }.apply { minHeight = dp(52) }
+        col.addView(importButton)
 
         col.addView(TextView(this).apply {
             text = "Carreras"; textSize = 18f; typeface = Typeface.DEFAULT_BOLD; setPadding(0, dp(16), 0, dp(4))
@@ -101,7 +104,64 @@ class LogActivity : Activity() {
 
     override fun onResume() {
         super.onResume()
+        refreshImportButton()
         refresh()
+    }
+
+    // ---------- importar historial ----------
+
+    private fun refreshImportButton() {
+        importButton.text = if (HistoryImporter.active)
+            "■ Terminar importación (${HistoryImporter.imported} anotadas)"
+        else "⤓ Importar carreras del historial de Uber / Cabify"
+    }
+
+    private fun toggleImport() {
+        if (HistoryImporter.active) {
+            val n = HistoryImporter.imported
+            HistoryImporter.stop(this)
+            Toast.makeText(this, "Importación terminada: $n carreras nuevas", Toast.LENGTH_LONG).show()
+            refreshImportButton(); refresh()
+            return
+        }
+        val form = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(20), dp(8), dp(20), 0) }
+        form.addView(TextView(this).apply {
+            text = "1. Toca \"Empezar\" (si el turno no está activo, Android pide permiso para leer la pantalla).\n" +
+                "2. Abre Uber › Ganancias, o Cabify › tus viajes.\n" +
+                "3. Entra a cada viaje, uno por uno. En Cabify baja hasta ver la distancia.\n" +
+                "4. Cada viaje anotado vibra y muestra \"Anotada\". Si abres uno dos veces, no se duplica.\n" +
+                "5. Vuelve aquí y toca \"Terminar importación\".\n\n" +
+                "El historial no muestra los km de recogida: se suma este promedio a cada viaje para el combustible."
+            textSize = 14f
+        })
+        form.addView(TextView(this).apply { text = "Km de recogida promedio por viaje"; setPadding(0, dp(10), 0, 0) })
+        val pickup = EditText(this).apply {
+            inputType = InputType.TYPE_CLASS_NUMBER or InputType.TYPE_NUMBER_FLAG_DECIMAL
+            setText(Money.decimal(SettingsStore.historyPickupKm(this@LogActivity)))
+        }
+        form.addView(pickup)
+        AlertDialog.Builder(this)
+            .setTitle("Importar historial")
+            .setView(ScrollView(this).apply { addView(form) })
+            .setPositiveButton("Empezar") { _, _ ->
+                SettingsStore.setHistoryPickupKm(this, num(pickup.text.toString()) ?: 2.0)
+                HistoryImporter.start()
+                if (ShiftService.running) {
+                    importStarted()
+                } else {
+                    HistoryImporter.startedShift = true
+                    val mpm = getSystemService(android.media.projection.MediaProjectionManager::class.java)
+                    @Suppress("DEPRECATION")
+                    startActivityForResult(mpm.createScreenCaptureIntent(), REQ_CAPTURE)
+                }
+            }
+            .setNegativeButton("Cancelar", null)
+            .show()
+    }
+
+    private fun importStarted() {
+        refreshImportButton()
+        Toast.makeText(this, "Importando: abre el historial de Uber o Cabify y entra a cada viaje", Toast.LENGTH_LONG).show()
     }
 
     // ---------- períodos ----------
@@ -242,7 +302,9 @@ class LogActivity : Activity() {
         val left = LinearLayout(context).apply {
             orientation = LinearLayout.VERTICAL
             addView(TextView(context).apply {
-                text = "${dayFmt.format(Date(t.time))} ${hourFmt.format(Date(t.time))} · ${t.app}" + if (t.source == "manual") " · manual" else ""
+                text = "${dayFmt.format(Date(t.time))} ${hourFmt.format(Date(t.time))} · ${t.app}" + when (t.source) {
+                    "manual" -> " · manual"; "historial" -> " · historial"; else -> ""
+                }
                 textSize = 12f; setTextColor(Color.parseColor("#6B7280"))
             })
             addView(TextView(context).apply {
@@ -274,6 +336,13 @@ class LogActivity : Activity() {
         val app = EditText(this).apply { setText(t?.app ?: "Cabify") }
         form.addView(TextView(this).apply { text = "App (Uber, Cabify, DiDi...)" })
         form.addView(app)
+        val whenFmt = SimpleDateFormat("dd/MM/yyyy HH:mm", Locale.ROOT)
+        form.addView(TextView(this).apply { text = "Fecha y hora (dd/mm/aaaa hh:mm)"; setPadding(0, dp(8), 0, 0) })
+        val whenInput = EditText(this).apply {
+            inputType = InputType.TYPE_CLASS_DATETIME
+            setText(whenFmt.format(Date(t?.time ?: System.currentTimeMillis())))
+        }
+        form.addView(whenInput)
         val price = input("Monto para ti ($)", txt(t?.price), decimal = false)
         val pickup = input("Km de recogida", txt(t?.pickupKm))
         val ride = input("Km del viaje", txt(t?.tripKm))
@@ -287,8 +356,12 @@ class LogActivity : Activity() {
                 if (p == null || p <= 0) {
                     Toast.makeText(this, "Falta el monto", Toast.LENGTH_SHORT).show(); return@setPositiveButton
                 }
+                val time = runCatching { whenFmt.parse(whenInput.text.toString().trim())?.time }.getOrNull()
+                if (time == null) {
+                    Toast.makeText(this, "Revisa la fecha y hora (ej: 18/11/2026 18:07)", Toast.LENGTH_LONG).show(); return@setPositiveButton
+                }
                 val trip = Trip(
-                    id = t?.id ?: 0, time = t?.time ?: System.currentTimeMillis(),
+                    id = t?.id ?: 0, time = time,
                     app = app.text.toString().trim().ifBlank { "Otra" }, price = p,
                     pickupKm = num(pickup.text.toString()) ?: 0.0, tripKm = num(ride.text.toString()) ?: 0.0,
                     minutes = num(minutes.text.toString()), source = t?.source ?: "manual",
@@ -321,6 +394,17 @@ class LogActivity : Activity() {
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         @Suppress("DEPRECATION")
         super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode == REQ_CAPTURE) {
+            if (resultCode == RESULT_OK && data != null) {
+                ShiftService.start(this, resultCode, data)
+                importStarted()
+            } else {
+                HistoryImporter.stop(this)
+                refreshImportButton()
+                Toast.makeText(this, "Sin permiso para leer la pantalla", Toast.LENGTH_SHORT).show()
+            }
+            return
+        }
         val uri = data?.data
         if (requestCode != REQ_EXPORT || resultCode != RESULT_OK || uri == null) return
         val dateFmt = SimpleDateFormat("dd-MM-yyyy", Locale.ROOT)
@@ -352,5 +436,6 @@ class LogActivity : Activity() {
 
     companion object {
         private const val REQ_EXPORT = 51
+        private const val REQ_CAPTURE = 52
     }
 }

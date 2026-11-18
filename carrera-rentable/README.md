@@ -25,6 +25,12 @@ Durante el turno, si después de una solicitud aparece la pantalla de ir a busca
 - $/km y $/hora reales (las horas salen de la duración de los turnos).
 - Corregir, borrar o agregar carreras a mano, y exportar a Excel (CSV con ";" y coma decimal).
 
+- **Importar historial**: en la bitácora, "Importar carreras del historial de Uber / Cabify". Mientras está
+  activo, cada detalle de viaje que se abre (Uber › Ganancias › viaje; Cabify › viaje) se anota con su
+  fecha, hora, monto final, distancia y duración. Los datos de un mismo viaje se juntan aunque haya que bajar
+  (Cabify), y no se duplican. Como el historial no muestra los km de recogida, se suma un promedio configurable.
+- "+ Agregar carrera" permite elegir fecha y hora.
+
 Todo se guarda solo en el teléfono (SQLite `bitacora.db`).
 
 ## Uso diario

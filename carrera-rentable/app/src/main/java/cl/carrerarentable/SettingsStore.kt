@@ -42,6 +42,10 @@ object SettingsStore {
     fun retentionPct(c: Context) = prefs(c).getFloat("retencion_pct", 15.25f).toDouble()
     fun setRetentionPct(c: Context, v: Double) = prefs(c).edit().putFloat("retencion_pct", v.toFloat()).apply()
 
+    /** Km de recogida que se suman a cada viaje importado del historial (el historial no los muestra). */
+    fun historyPickupKm(c: Context) = prefs(c).getFloat("km_recogida_historial", 2f).toDouble()
+    fun setHistoryPickupKm(c: Context, v: Double) = prefs(c).edit().putFloat("km_recogida_historial", v.toFloat()).apply()
+
     /** Anotar sola en la bitácora la carrera aceptada. */
     fun autoLog(c: Context) = prefs(c).getBoolean("bitacora_auto", true)
     fun setAutoLog(c: Context, v: Boolean) = prefs(c).edit().putBoolean("bitacora_auto", v).apply()

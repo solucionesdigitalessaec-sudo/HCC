@@ -99,7 +99,8 @@ class ShiftService : Service() {
         startCapture(mp)
         running = true
         Diag.ocr(this, "Turno iniciado")
-        workerHandler.post { shiftId = TripLog.get(this).startShift(System.currentTimeMillis()) }
+        // Si solo se está importando el historial, no cuenta como turno de trabajo.
+        if (!HistoryImporter.active) workerHandler.post { shiftId = TripLog.get(this).startShift(System.currentTimeMillis()) }
         workerHandler.postDelayed(tick, 800)
         return START_NOT_STICKY
     }
@@ -212,6 +213,7 @@ class ShiftService : Service() {
 
     override fun onDestroy() {
         running = false
+        HistoryImporter.onShiftEnded()
         if (shiftId > 0) runCatching { TripLog.get(this).touchShift(shiftId, System.currentTimeMillis()) }
         OfferController.hide()
         handler.removeCallbacksAndMessages(null)

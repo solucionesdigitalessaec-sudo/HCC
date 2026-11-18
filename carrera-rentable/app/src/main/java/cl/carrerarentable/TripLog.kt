@@ -7,19 +7,35 @@ import android.database.sqlite.SQLiteOpenHelper
 import cl.carrerarentable.core.Trip
 
 /** Bitácora guardada solo en el teléfono (SQLite): carreras y turnos. */
-class TripLog private constructor(c: Context) : SQLiteOpenHelper(c.applicationContext, "bitacora.db", null, 1) {
+class TripLog private constructor(c: Context) : SQLiteOpenHelper(c.applicationContext, "bitacora.db", null, 2) {
 
     override fun onCreate(db: SQLiteDatabase) {
         db.execSQL(
             """CREATE TABLE carreras (id INTEGER PRIMARY KEY AUTOINCREMENT, tiempo INTEGER NOT NULL,
                app TEXT NOT NULL, monto REAL NOT NULL, km_recogida REAL NOT NULL, km_viaje REAL NOT NULL,
-               minutos REAL, origen TEXT NOT NULL)"""
+               minutos REAL, origen TEXT NOT NULL, clave TEXT)"""
         )
         db.execSQL("CREATE INDEX carreras_tiempo ON carreras(tiempo)")
         db.execSQL("CREATE TABLE turnos (id INTEGER PRIMARY KEY AUTOINCREMENT, inicio INTEGER NOT NULL, fin INTEGER NOT NULL)")
     }
 
-    override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) {}
+    override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) {
+        // v2: "clave" identifica los viajes importados del historial (app + fecha y hora) para no duplicarlos.
+        if (oldVersion < 2) db.execSQL("ALTER TABLE carreras ADD COLUMN clave TEXT")
+    }
+
+    /**
+     * Guarda un viaje importado del historial. Si ya existe uno con la misma clave, lo actualiza.
+     * Devuelve true si es nuevo.
+     */
+    fun upsertByKey(key: String, t: Trip): Boolean {
+        val db = writableDatabase
+        val v = values(t).apply { put("clave", key) }
+        val updated = db.update("carreras", v, "clave = ?", arrayOf(key))
+        if (updated > 0) return false
+        db.insert("carreras", null, v)
+        return true
+    }
 
     // ---------- carreras ----------
 

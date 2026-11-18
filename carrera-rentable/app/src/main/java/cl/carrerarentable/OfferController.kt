@@ -58,6 +58,11 @@ object OfferController {
      * Devuelve true si hay una solicitud en pantalla.
      */
     fun onScreenText(c: Context, lines: List<String>): Boolean {
+        if (HistoryImporter.active) {
+            // Importando historial: solo se leen detalles de viajes hechos, sin panel.
+            HistoryImporter.onLines(c, lines)
+            return false
+        }
         val p = panel(c)
         val offer = if (lines.isEmpty()) null else OfferParser.parseRequest(lines)
         if (offer == null) {
