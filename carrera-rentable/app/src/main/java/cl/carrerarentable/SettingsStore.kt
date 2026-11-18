@@ -42,6 +42,10 @@ object SettingsStore {
     fun retentionPct(c: Context) = prefs(c).getFloat("retencion_pct", 15.25f).toDouble()
     fun setRetentionPct(c: Context, v: Double) = prefs(c).edit().putFloat("retencion_pct", v.toFloat()).apply()
 
+    /** Última empresa con la que se empezó un turno. */
+    fun lastApp(c: Context) = prefs(c).getString("ultima_app", "Cabify") ?: "Cabify"
+    fun setLastApp(c: Context, v: String) = prefs(c).edit().putString("ultima_app", v).apply()
+
     /** Km de recogida que se suman a cada viaje importado del historial (el historial no los muestra). */
     fun historyPickupKm(c: Context) = prefs(c).getFloat("km_recogida_historial", 2f).toDouble()
     fun setHistoryPickupKm(c: Context, v: Double) = prefs(c).edit().putFloat("km_recogida_historial", v.toFloat()).apply()

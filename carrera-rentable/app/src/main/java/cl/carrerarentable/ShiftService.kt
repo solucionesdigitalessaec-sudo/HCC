@@ -73,6 +73,7 @@ class ShiftService : Service() {
         val data: Intent? = if (Build.VERSION.SDK_INT >= 33) intent?.getParcelableExtra(EXTRA_DATA, Intent::class.java)
         else @Suppress("DEPRECATION") intent?.getParcelableExtra(EXTRA_DATA)
         if (data == null || projection != null) return START_NOT_STICKY
+        currentApp = intent?.getStringExtra(EXTRA_APP)
 
         // En Android 14+ el servicio debe estar en primer plano ANTES de pedir la captura.
         val notification = buildNotification()
@@ -100,7 +101,7 @@ class ShiftService : Service() {
         running = true
         Diag.ocr(this, "Turno iniciado")
         // Si solo se está importando el historial, no cuenta como turno de trabajo.
-        if (!HistoryImporter.active) workerHandler.post { shiftId = TripLog.get(this).startShift(System.currentTimeMillis()) }
+        if (!HistoryImporter.active) workerHandler.post { shiftId = TripLog.get(this).startShift(System.currentTimeMillis(), currentApp) }
         workerHandler.postDelayed(tick, 800)
         return START_NOT_STICKY
     }
@@ -204,7 +205,7 @@ class ShiftService : Service() {
         return Notification.Builder(this, CHANNEL)
             .setSmallIcon(R.drawable.ic_stat)
             .setContentTitle("KMRentable · turno activo")
-            .setContentText("Leyendo las solicitudes de la pantalla")
+            .setContentText(currentApp?.let { "Turno en $it · leyendo las solicitudes" } ?: "Leyendo las solicitudes de la pantalla")
             .setContentIntent(open)
             .setOngoing(true)
             .addAction(Notification.Action.Builder(null, "Terminar turno", stop).build())
@@ -213,6 +214,7 @@ class ShiftService : Service() {
 
     override fun onDestroy() {
         running = false
+        currentApp = null
         HistoryImporter.onShiftEnded()
         if (shiftId > 0) runCatching { TripLog.get(this).touchShift(shiftId, System.currentTimeMillis()) }
         OfferController.hide()
@@ -235,15 +237,21 @@ class ShiftService : Service() {
         private const val ACTION_STOP = "cl.carrerarentable.STOP"
         const val EXTRA_RESULT_CODE = "resultCode"
         const val EXTRA_DATA = "data"
+        const val EXTRA_APP = "app"
+
+        /** Empresa del turno activo (Uber, Cabify, DiDi) o null. */
+        @Volatile var currentApp: String? = null
+            private set
 
         @Volatile var running = false
             private set
 
-        fun start(c: Context, resultCode: Int, data: Intent) {
+        fun start(c: Context, resultCode: Int, data: Intent, app: String? = null) {
             c.startForegroundService(
                 Intent(c, ShiftService::class.java)
                     .putExtra(EXTRA_RESULT_CODE, resultCode)
                     .putExtra(EXTRA_DATA, data)
+                    .putExtra(EXTRA_APP, app)
             )
         }
 

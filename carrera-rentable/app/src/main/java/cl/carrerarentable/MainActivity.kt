@@ -311,16 +311,37 @@ class MainActivity : Activity() {
 
     private fun refreshShift() {
         val on = ShiftService.running
-        shiftStatus.text = if (on) "● Turno ACTIVO (leyendo la pantalla)" else "● Turno detenido"
+        shiftStatus.text = if (on) "● Turno ACTIVO" + (ShiftService.currentApp?.let { " en $it" } ?: "") + " (leyendo la pantalla)"
+        else "● Turno detenido"
         shiftStatus.setTextColor(Color.parseColor(if (on) "#16A34A" else "#6B7280"))
         shiftButton.text = if (on) "■ Terminar turno" else "▶ Empezar turno"
     }
 
+    /** Empresa elegida para el turno que se está iniciando. */
+    private var shiftApp: String? = null
+
+    /** Primero se elige con qué app se va a trabajar; después se piden los permisos. */
     private fun startShift() {
         if (!OfferController.canDraw(this)) {
             Toast.makeText(this, "Primero activa \"Mostrar sobre otras apps\" (paso 1)", Toast.LENGTH_LONG).show()
             return
         }
+        val apps = arrayOf("Uber", "Cabify", "DiDi")
+        val last = SettingsStore.lastApp(this)
+        var choice = apps.indexOf(last).coerceAtLeast(0)
+        android.app.AlertDialog.Builder(this)
+            .setTitle("¿Con qué app vas a trabajar?")
+            .setSingleChoiceItems(apps, choice) { _, which -> choice = which }
+            .setPositiveButton("Empezar turno") { _, _ ->
+                shiftApp = apps[choice]
+                SettingsStore.setLastApp(this, apps[choice])
+                requestCapture()
+            }
+            .setNegativeButton("Cancelar", null)
+            .show()
+    }
+
+    private fun requestCapture() {
         if (android.os.Build.VERSION.SDK_INT >= 33 &&
             checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS) != android.content.pm.PackageManager.PERMISSION_GRANTED
         ) {
@@ -355,8 +376,8 @@ class MainActivity : Activity() {
             Toast.makeText(this, "Sin permiso para leer la pantalla, el turno no empezó", Toast.LENGTH_LONG).show()
             return
         }
-        ShiftService.start(this, resultCode, data)
-        Toast.makeText(this, "Turno iniciado: abre Uber, Cabify o DiDi", Toast.LENGTH_SHORT).show()
+        ShiftService.start(this, resultCode, data, shiftApp)
+        Toast.makeText(this, "Turno iniciado: abre ${shiftApp ?: "tu app de conducción"}", Toast.LENGTH_SHORT).show()
         shiftButton.postDelayed({ refreshShift() }, 800)
     }
 

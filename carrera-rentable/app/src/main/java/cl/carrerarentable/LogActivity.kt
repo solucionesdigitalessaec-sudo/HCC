@@ -216,16 +216,15 @@ class LogActivity : Activity() {
         val (from, to) = range(period)
         Thread {
             val periodTrips = log.trips(from, to)
-            // Las horas de turno no se pueden separar por empresa: solo cuentan en "Todas".
-            val shiftMin = if (appFilter == null) log.shiftMinutes(from, to) else 0.0
+            val shiftMin = log.shiftMinutes(from, to, appFilter)
             val vehicle = SettingsStore.vehicle(this)
             val ret = SettingsStore.retentionPct(this)
             val all = Period.values().map { p ->
                 val (f, t) = range(p)
-                p to Ledger.summarize(filterApp(log.trips(f, t)), vehicle, ret,
-                    if (appFilter == null) log.shiftMinutes(f, t) else 0.0)
+                p to Ledger.summarize(filterApp(log.trips(f, t)), vehicle, ret, log.shiftMinutes(f, t, appFilter))
             }
-            runOnUiThread { showTotals(all); show(periodTrips, shiftMin) }
+            val shiftByApp = APPS.associateWith { log.shiftMinutes(from, to, it) }
+            runOnUiThread { showTotals(all); show(periodTrips, shiftMin, shiftByApp) }
         }.start()
     }
 
@@ -253,7 +252,7 @@ class LogActivity : Activity() {
         }
     }
 
-    private fun show(periodTrips: List<Trip>, shiftMinutes: Double) {
+    private fun show(periodTrips: List<Trip>, shiftMinutes: Double, shiftByApp: Map<String, Double>) {
         val trips = filterApp(periodTrips)
         shown = trips
         val vehicle = SettingsStore.vehicle(this)
@@ -262,7 +261,7 @@ class LogActivity : Activity() {
         summaryBox.removeAllViews()
         // En "Todas": ganancia real de cada empresa por separado.
         val byApp = if (appFilter == null) periodTrips.groupBy { it.app }
-            .map { (a, l) -> a to Ledger.summarize(l, vehicle, ret, 0.0) }
+            .map { (a, l) -> a to Ledger.summarize(l, vehicle, ret, shiftByApp[a] ?: 0.0) }
             .sortedByDescending { it.second.net } else emptyList()
         summaryBox.addView(summaryCard(s, byApp))
 
@@ -298,9 +297,9 @@ class LogActivity : Activity() {
             "Retención de impuestos" to "−" + Money.clp(s.retention),
             "Combustible" to "−" + Money.clp(s.fuel),
         ) + (if (s.otherCosts > 0) listOf("Otros costos" to "−" + Money.clp(s.otherCosts)) else emptyList()) + listOf(
-        ) + (if (appFilter == null) listOf(
+        ) + listOf(
             "Horas de turno" to (if (s.shiftMinutes > 0) "${Money.decimal(s.shiftMinutes / 60.0)} h" else "—"),
-        ) else emptyList()) + listOf(
+        ) + listOf(
             "Antes de retención" to Money.clp(s.net + s.retention),
         )
         lines.forEach { (k, v) ->
@@ -322,7 +321,8 @@ class LogActivity : Activity() {
                     orientation = LinearLayout.HORIZONTAL
                     setPadding(0, dp(4), 0, 0)
                     addView(TextView(context).apply {
-                        text = "$a · ${sa.trips} carreras" + (sa.netPerKm?.let { " · ${Money.clp(it)}/km" } ?: "")
+                        text = "$a · ${sa.trips} carreras" + (sa.netPerKm?.let { " · ${Money.clp(it)}/km" } ?: "") +
+                            (sa.netPerHour?.let { " · ${Money.clp(it)}/h" } ?: "")
                         textSize = 14f; setTextColor(Color.parseColor("#D1D5DB"))
                     }, LinearLayout.LayoutParams(0, -2, 1f))
                     addView(TextView(context).apply {

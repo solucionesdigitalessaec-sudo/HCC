@@ -18,7 +18,7 @@ La app **solo muestra información**: no acepta ni rechaza viajes. Nada sale del
 Durante el turno, si después de una solicitud aparece la pantalla de ir a buscar al pasajero ("Navegar",
 "PIN obligatorio", "Iniciar viaje", "Llegué"...), la carrera se anota sola. En **📒 Bitácora y ganancias**:
 
-- Ganancia real de **hoy, la semana (desde el lunes) y el mes**, siempre a la vista, **por empresa** (Todas · Uber · Cabify · DiDi). En "Todas" se ve además la ganancia de cada empresa. Las horas de turno y el $/hora real solo en "Todas" (un turno puede tener varias apps abiertas).
+- Ganancia real de **hoy, la semana (desde el lunes) y el mes**, siempre a la vista, **por empresa** (Todas · Uber · Cabify · DiDi). En "Todas" se ve además la ganancia de cada empresa. Al empezar el turno se elige la empresa (el conductor usa una app a la vez), así que las horas de turno y el $/hora real también salen por empresa, y las carreras del turno quedan a nombre de esa empresa.
 - Ganancia real = monto "para ti" − retención de impuestos (15,25% en 2026, configurable) − combustible
   (km de recogida + viaje × precio del litro ÷ km por litro) − otros costos por km. La comisión de la app
   ya viene descontada en el monto de la solicitud.

@@ -7,7 +7,7 @@ import android.database.sqlite.SQLiteOpenHelper
 import cl.carrerarentable.core.Trip
 
 /** Bitácora guardada solo en el teléfono (SQLite): carreras y turnos. */
-class TripLog private constructor(c: Context) : SQLiteOpenHelper(c.applicationContext, "bitacora.db", null, 2) {
+class TripLog private constructor(c: Context) : SQLiteOpenHelper(c.applicationContext, "bitacora.db", null, 3) {
 
     override fun onCreate(db: SQLiteDatabase) {
         db.execSQL(
@@ -16,12 +16,14 @@ class TripLog private constructor(c: Context) : SQLiteOpenHelper(c.applicationCo
                minutos REAL, origen TEXT NOT NULL, clave TEXT)"""
         )
         db.execSQL("CREATE INDEX carreras_tiempo ON carreras(tiempo)")
-        db.execSQL("CREATE TABLE turnos (id INTEGER PRIMARY KEY AUTOINCREMENT, inicio INTEGER NOT NULL, fin INTEGER NOT NULL)")
+        db.execSQL("CREATE TABLE turnos (id INTEGER PRIMARY KEY AUTOINCREMENT, inicio INTEGER NOT NULL, fin INTEGER NOT NULL, app TEXT)")
     }
 
     override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) {
         // v2: "clave" identifica los viajes importados del historial (app + fecha y hora) para no duplicarlos.
         if (oldVersion < 2) db.execSQL("ALTER TABLE carreras ADD COLUMN clave TEXT")
+        // v3: cada turno es de una empresa (el conductor usa una app a la vez).
+        if (oldVersion < 3) db.execSQL("ALTER TABLE turnos ADD COLUMN app TEXT")
     }
 
     /**
@@ -78,20 +80,21 @@ class TripLog private constructor(c: Context) : SQLiteOpenHelper(c.applicationCo
     // ---------- turnos ----------
 
     /** Empieza un turno y devuelve su id. El fin se va actualizando mientras el turno sigue activo. */
-    fun startShift(now: Long): Long = writableDatabase.insert("turnos", null, ContentValues().apply {
+    fun startShift(now: Long, app: String?): Long = writableDatabase.insert("turnos", null, ContentValues().apply {
         put("inicio", now); put("fin", now)
+        if (app != null) put("app", app) else putNull("app")
     })
 
     fun touchShift(id: Long, now: Long) {
         writableDatabase.update("turnos", ContentValues().apply { put("fin", now) }, "id = ?", arrayOf(id.toString()))
     }
 
-    /** Minutos de turno dentro de [from, to) (los turnos que cruzan el límite se cortan). */
-    fun shiftMinutes(from: Long, to: Long): Double {
+    /** Minutos de turno dentro de [from, to) (los turnos que cruzan el límite se cortan). app = null: todas. */
+    fun shiftMinutes(from: Long, to: Long, app: String? = null): Double {
         var ms = 0L
-        readableDatabase.rawQuery(
-            "SELECT inicio, fin FROM turnos WHERE fin > ? AND inicio < ?", arrayOf(from.toString(), to.toString()),
-        ).use { c ->
+        val sql = "SELECT inicio, fin FROM turnos WHERE fin > ? AND inicio < ?" + if (app != null) " AND app = ?" else ""
+        val args = listOfNotNull(from.toString(), to.toString(), app).toTypedArray()
+        readableDatabase.rawQuery(sql, args).use { c ->
             while (c.moveToNext()) {
                 val a = maxOf(c.getLong(0), from)
                 val b = minOf(c.getLong(1), to)

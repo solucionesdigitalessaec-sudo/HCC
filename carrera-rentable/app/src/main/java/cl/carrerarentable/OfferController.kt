@@ -93,7 +93,8 @@ object OfferController {
         if (cur != null && kotlin.math.abs(cur.offer.price - offer.price) < 1.0) {
             cur.lastSeen = now
         } else {
-            candidate = Candidate(offer, RideAppGuess.from(lines), signature, now)
+            // La empresa del turno manda; si no hay, se adivina por la pantalla.
+            candidate = Candidate(offer, ShiftService.currentApp ?: RideAppGuess.from(lines), signature, now)
         }
     }
 
@@ -135,7 +136,8 @@ object OfferController {
         SettingsStore.setLastText(c, OfferParser.normalize(lines).joinToString("\n"))
         val rules = SettingsStore.rules(c)
         // En Cabify el conductor desactiva el efectivo: si no se ve la forma de pago, se toma como tarjeta.
-        val cabify = lines.any { it.contains("cabify", ignoreCase = true) || it.contains("para ti", ignoreCase = true) }
+        val cabify = ShiftService.currentApp == "Cabify" ||
+            lines.any { it.contains("cabify", ignoreCase = true) || it.contains("para ti", ignoreCase = true) }
         val adjusted = if (cabify && offer.payment == Payment.UNKNOWN) offer.copy(payment = Payment.CARD) else offer
         val evaluation = ProfitCalculator.evaluate(adjusted, rules)
         if (!canDraw(c)) {
