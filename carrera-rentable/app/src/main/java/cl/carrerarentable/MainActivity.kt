@@ -35,6 +35,7 @@ class MainActivity : Activity() {
     private lateinit var otherCost: EditText
     private lateinit var retention: EditText
     private lateinit var autoLog: CheckBox
+    private lateinit var lightMode: CheckBox
     private lateinit var hideSec: EditText
     private lateinit var vibrate: CheckBox
     private lateinit var cardOnly: CheckBox
@@ -111,6 +112,13 @@ class MainActivity : Activity() {
             startActivity(Intent(this, LogActivity::class.java))
         }.apply { textSize = 17f; minHeight = dp(56); isAllCaps = false }
         col.addView(logButton)
+        lightMode = CheckBox(this).apply {
+            text = "Modo liviano (recomendado): lee la pantalla con menos frecuencia para que Waze y Uber no se pongan lentos. " +
+                "El panel puede tardar 2 a 4 segundos. Se aplica al empezar el turno."
+            isChecked = SettingsStore.lightMode(this@MainActivity)
+            setOnCheckedChangeListener { _, v -> SettingsStore.setLightMode(this@MainActivity, v) }
+        }
+        col.addView(lightMode)
         col.addView(note(
             "Al empezar, Android pregunta si permites grabar la pantalla: elige \"Pantalla completa\" y toca " +
                 "\"Empezar\". Android lo pregunta en cada turno; no se puede guardar. Luego abre Uber, Cabify o DiDi."

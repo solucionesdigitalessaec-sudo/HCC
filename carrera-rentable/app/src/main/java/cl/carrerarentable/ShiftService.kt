@@ -67,6 +67,10 @@ class ShiftService : Service() {
     /** Muestra de la captura anterior para saber si la pantalla cambió. */
     private var lastSample: IntArray? = null
     private var lastTouch = 0L
+    /** Modo liviano (ajuste): menos lecturas y menor resolución. Se fija al empezar el turno. */
+    private var light = true
+    private val fastMs get() = if (light) 1500L else 1000L
+    private val slowMs get() = if (light) 3000L else 2000L
     private val captureTimeout = Runnable { pauseDisplay(); busy = false }
 
     /** Turno en la bitácora (para el $/hora real). Su fin se actualiza cada minuto. */
@@ -79,7 +83,7 @@ class ShiftService : Service() {
             if (shiftId > 0 && now - lastTouch > 60_000) { lastTouch = now; TripLog.get(this@ShiftService).touchShift(shiftId, now) }
             captureOnce()
             val fast = HistoryImporter.active || android.os.SystemClock.elapsedRealtime() < fastUntil
-            workerHandler.postDelayed(this, if (fast) FAST_MS else SLOW_MS)
+            workerHandler.postDelayed(this, if (fast) fastMs else slowMs)
         }
     }
 
@@ -129,8 +133,9 @@ class ShiftService : Service() {
 
     private fun startCapture(mp: MediaProjection) {
         val (w, h, dpi) = screenSize()
-        // Se captura a menor resolución (máx. 640 px de ancho): suficiente para leer y gasta menos.
-        scale = minOf(1f, 640f / w)
+        // Se captura a menor resolución (640 px de ancho, 540 en modo liviano): suficiente para leer y gasta menos.
+        light = SettingsStore.lightMode(this)
+        scale = minOf(1f, (if (light) 540f else 640f) / w)
         val cw = (w * scale).toInt()
         val ch = (h * scale).toInt()
         val r = ImageReader.newInstance(cw, ch, PixelFormat.RGBA_8888, 2)
@@ -309,9 +314,7 @@ class ShiftService : Service() {
     companion object {
         private const val CHANNEL = "turno"
         private const val NOTIF_ID = 7
-        /** Cada cuánto se lee la pantalla: rápido mientras hay km o montos; tranquilo el resto del tiempo. */
-        private const val FAST_MS = 1000L
-        private const val SLOW_MS = 2000L
+        /** Lectura rápida mientras en pantalla haya km o montos; después vuelve al modo tranquilo. */
         private const val FAST_WINDOW_MS = 20_000L
         private val INTERESTING = Regex("""\d\s*km\b|\$\s?\d|CLP\s?\d|\d\s?CLP""", RegexOption.IGNORE_CASE)
         private const val ACTION_STOP = "cl.carrerarentable.STOP"

@@ -42,6 +42,10 @@ object SettingsStore {
     fun retentionPct(c: Context) = prefs(c).getFloat("retencion_pct", 15.25f).toDouble()
     fun setRetentionPct(c: Context, v: Double) = prefs(c).edit().putFloat("retencion_pct", v.toFloat()).apply()
 
+    /** Modo liviano: lee la pantalla con menos frecuencia y a menor resolución (teléfonos que se ponen lentos). */
+    fun lightMode(c: Context) = prefs(c).getBoolean("modo_liviano", true)
+    fun setLightMode(c: Context, v: Boolean) = prefs(c).edit().putBoolean("modo_liviano", v).apply()
+
     /** Última empresa con la que se empezó un turno. */
     fun lastApp(c: Context) = prefs(c).getString("ultima_app", "Cabify") ?: "Cabify"
     fun setLastApp(c: Context, v: String) = prefs(c).edit().putString("ultima_app", v).apply()
