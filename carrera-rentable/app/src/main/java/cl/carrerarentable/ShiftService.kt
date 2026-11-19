@@ -32,15 +32,26 @@ import com.google.mlkit.vision.text.TextRecognizer
 import com.google.mlkit.vision.text.latin.TextRecognizerOptions
 
 /**
- * "Turno": mientras dura, se toma una captura de la pantalla cada segundo y se reconoce el texto
+ * "Turno": mientras dura, se toma una captura de la pantalla cada 1-2 segundos y se reconoce el texto
  * con ML Kit (sin internet). El texto pasa a OfferController, que decide si hay una solicitud
  * de Uber / Cabify / DiDi y muestra el panel.
+ *
+ * Para no hacer lento el teléfono (Waze, Uber...):
+ *  - la pantalla virtual queda en pausa entre capturas (si no, Android copia la pantalla ~60 veces
+ *    por segundo para esta app),
+ *  - cada 2 s en modo tranquilo; cada 1 s solo mientras en pantalla hay km o montos,
+ *  - si la pantalla no cambió, no se vuelve a reconocer el texto,
+ *  - todo el trabajo corre con prioridad baja ("de fondo") y reutiliza la memoria.
  */
 class ShiftService : Service() {
 
     private val handler = Handler(Looper.getMainLooper())
     /** Las capturas se convierten en un hilo aparte para no congelar la app. */
-    private val worker = android.os.HandlerThread("kmrentable-captura").apply { start() }
+    private val worker = android.os.HandlerThread("kmrentable-captura", android.os.Process.THREAD_PRIORITY_BACKGROUND).apply { start() }
+    /** El reconocimiento de texto también corre con prioridad baja. */
+    private val ocrExecutor = java.util.concurrent.Executors.newSingleThreadExecutor { r ->
+        Thread({ android.os.Process.setThreadPriority(android.os.Process.THREAD_PRIORITY_BACKGROUND); r.run() }, "kmrentable-ocr")
+    }
     private val workerHandler = Handler(worker.looper)
     private var projection: MediaProjection? = null
     private var display: VirtualDisplay? = null
@@ -49,6 +60,14 @@ class ShiftService : Service() {
     @Volatile private var busy = false
     private var scale = 1f
     private var lastDiag = 0L
+    /** Hasta cuándo leer rápido (cada 1 s): mientras en pantalla haya km o montos. */
+    @Volatile private var fastUntil = 0L
+    /** Imagen reutilizada entre capturas (evita crear memoria nueva cada vez). */
+    private var buffer: Bitmap? = null
+    /** Muestra de la captura anterior para saber si la pantalla cambió. */
+    private var lastSample: IntArray? = null
+    private var lastTouch = 0L
+    private val captureTimeout = Runnable { pauseDisplay(); busy = false }
 
     /** Turno en la bitácora (para el $/hora real). Su fin se actualiza cada minuto. */
     private var shiftId = -1L
@@ -56,9 +75,11 @@ class ShiftService : Service() {
 
     private val tick = object : Runnable {
         override fun run() {
-            if (shiftId > 0 && ++ticks % 60 == 0) TripLog.get(this@ShiftService).touchShift(shiftId, System.currentTimeMillis())
+            val now = System.currentTimeMillis()
+            if (shiftId > 0 && now - lastTouch > 60_000) { lastTouch = now; TripLog.get(this@ShiftService).touchShift(shiftId, now) }
             captureOnce()
-            workerHandler.postDelayed(this, INTERVAL_MS)
+            val fast = HistoryImporter.active || android.os.SystemClock.elapsedRealtime() < fastUntil
+            workerHandler.postDelayed(this, if (fast) FAST_MS else SLOW_MS)
         }
     }
 
@@ -108,8 +129,8 @@ class ShiftService : Service() {
 
     private fun startCapture(mp: MediaProjection) {
         val (w, h, dpi) = screenSize()
-        // Se captura a menor resolución (máx. 720 px de ancho): suficiente para leer y gasta menos.
-        scale = minOf(1f, 720f / w)
+        // Se captura a menor resolución (máx. 640 px de ancho): suficiente para leer y gasta menos.
+        scale = minOf(1f, 640f / w)
         val cw = (w * scale).toInt()
         val ch = (h * scale).toInt()
         val r = ImageReader.newInstance(cw, ch, PixelFormat.RGBA_8888, 2)
@@ -118,7 +139,14 @@ class ShiftService : Service() {
             "KMRentable", cw, ch, dpi,
             DisplayManager.VIRTUAL_DISPLAY_FLAG_AUTO_MIRROR, r.surface, null, workerHandler,
         )
-        recognizer = TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS)
+        pauseDisplay()
+        recognizer = TextRecognition.getClient(TextRecognizerOptions.Builder().setExecutor(ocrExecutor).build())
+    }
+
+    /** Sin superficie, Android deja de copiar la pantalla para esta app. */
+    private fun pauseDisplay() {
+        runCatching { display?.surface = null }
+        reader?.setOnImageAvailableListener(null, null)
     }
 
     private fun screenSize(): Triple<Int, Int, Int> {
@@ -134,6 +162,7 @@ class ShiftService : Service() {
         }
     }
 
+    /** Corre en el hilo de captura: reanuda la pantalla virtual solo para tomar una imagen. */
     private fun captureOnce() {
         if (busy) return
         val power = getSystemService(PowerManager::class.java)
@@ -142,15 +171,31 @@ class ShiftService : Service() {
             diag("Falta el permiso \"Mostrar sobre otras apps\": el panel no se puede mostrar")
             return
         }
-        val image = runCatching { reader?.acquireLatestImage() }.getOrNull() ?: return
+        val r = reader ?: return
+        val d = display ?: return
+        busy = true
+        r.setOnImageAvailableListener({ ir ->
+            val image = runCatching { ir.acquireLatestImage() }.getOrNull() ?: return@setOnImageAvailableListener
+            workerHandler.removeCallbacks(captureTimeout)
+            pauseDisplay()
+            process(image)
+        }, workerHandler)
+        d.surface = r.surface
+        // Si la pantalla no entrega imagen (por ejemplo, no cambió nada), se vuelve a pausar.
+        workerHandler.postDelayed(captureTimeout, 1500)
+    }
+
+    private fun process(image: android.media.Image) {
         val bitmap: Bitmap
         try {
             val plane = image.planes[0]
-            val rowPadding = plane.rowStride - plane.pixelStride * image.width
-            val full = Bitmap.createBitmap(image.width + rowPadding / plane.pixelStride, image.height, Bitmap.Config.ARGB_8888)
-            full.copyPixelsFromBuffer(plane.buffer)
-            bitmap = if (rowPadding == 0) full else Bitmap.createBitmap(full, 0, 0, image.width, image.height)
+            val width = image.width + (plane.rowStride - plane.pixelStride * image.width) / plane.pixelStride
+            val b = buffer?.takeIf { it.width == width && it.height == image.height }
+                ?: Bitmap.createBitmap(width, image.height, Bitmap.Config.ARGB_8888).also { buffer = it }
+            b.copyPixelsFromBuffer(plane.buffer)
+            bitmap = b
         } catch (e: Exception) {
+            busy = false
             return
         } finally {
             image.close()
@@ -162,13 +207,25 @@ class ShiftService : Service() {
             Canvas(bitmap).drawRect(r.left * scale, r.top * scale, r.right * scale, r.bottom * scale, p)
         }
 
-        busy = true
+        // Si la pantalla casi no cambió desde la última lectura, no se vuelve a reconocer el texto.
+        val sample = sampleOf(bitmap)
+        val prev = lastSample
+        lastSample = sample
+        if (prev != null && !HistoryImporter.active && changedFraction(prev, sample) < 0.02) {
+            busy = false
+            return
+        }
+
         recognizer?.process(InputImage.fromBitmap(bitmap, 0))
             ?.addOnSuccessListener { result ->
                 val raw = result.textBlocks
                     .flatMap { it.lines }
                     .sortedWith(compareBy({ it.boundingBox?.top ?: 0 }, { it.boundingBox?.left ?: 0 }))
                     .map { ScreenLine(it.text, it.boundingBox?.top ?: 0, it.boundingBox?.bottom ?: 0) }
+                // Lectura rápida solo mientras en pantalla haya km o montos.
+                if (raw.any { INTERESTING.containsMatchIn(it.text) }) {
+                    fastUntil = android.os.SystemClock.elapsedRealtime() + FAST_WINDOW_MS
+                }
                 // Quitar nuestro propio panel si quedó en la captura; si no se puede, descartarla.
                 val cleaned = ScreenFilter.removeOwnPanel(raw)
                 if (cleaned == null) {
@@ -182,6 +239,24 @@ class ShiftService : Service() {
             ?.addOnFailureListener { e -> diag("error al reconocer texto: ${e.message}") }
             ?.addOnCompleteListener { busy = false }
             ?: run { busy = false }
+    }
+
+    /** Muestra de 24 × 48 píxeles de la captura (para comparar sin recorrer toda la imagen). */
+    private fun sampleOf(b: Bitmap): IntArray {
+        val cols = 24; val rows = 48
+        val out = IntArray(cols * rows)
+        for (y in 0 until rows) for (x in 0 until cols) {
+            // Centro de cada celda de la grilla.
+            out[y * cols + x] = b.getPixel((x * 2 + 1) * b.width / (cols * 2), (y * 2 + 1) * b.height / (rows * 2))
+        }
+        return out
+    }
+
+    private fun changedFraction(a: IntArray, b: IntArray): Double {
+        if (a.size != b.size) return 1.0
+        var n = 0
+        for (i in a.indices) if (a[i] != b[i]) n++
+        return n.toDouble() / a.size
     }
 
     private fun diag(status: String, lines: List<String> = emptyList(), force: Boolean = false) {
@@ -221,6 +296,7 @@ class ShiftService : Service() {
         handler.removeCallbacksAndMessages(null)
         workerHandler.removeCallbacksAndMessages(null)
         worker.quitSafely()
+        ocrExecutor.shutdown()
         runCatching { display?.release() }
         runCatching { reader?.close() }
         runCatching { recognizer?.close() }
@@ -233,7 +309,11 @@ class ShiftService : Service() {
     companion object {
         private const val CHANNEL = "turno"
         private const val NOTIF_ID = 7
-        private const val INTERVAL_MS = 1000L
+        /** Cada cuánto se lee la pantalla: rápido mientras hay km o montos; tranquilo el resto del tiempo. */
+        private const val FAST_MS = 1000L
+        private const val SLOW_MS = 2000L
+        private const val FAST_WINDOW_MS = 20_000L
+        private val INTERESTING = Regex("""\d\s*km\b|\$\s?\d|CLP\s?\d|\d\s?CLP""", RegexOption.IGNORE_CASE)
         private const val ACTION_STOP = "cl.carrerarentable.STOP"
         const val EXTRA_RESULT_CODE = "resultCode"
         const val EXTRA_DATA = "data"
