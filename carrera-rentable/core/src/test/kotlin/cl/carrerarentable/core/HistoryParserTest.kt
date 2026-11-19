@@ -101,4 +101,12 @@ class HistoryParserTest {
         assertNull(HistoryParser.parse(listOf("Cabify", "$ 3.855 para ti", "14 min · 4 km", "17 min · 5 km", "Aceptar"), zone, today))
         assertNull(HistoryParser.parse(listOf("Precios dinámicos ahora", "Oportunidades", "Ganancias"), zone, today))
     }
+
+    @Test
+    fun ocrSeparatorsInUberDate() {
+        for (line in listOf("Uber X . 16 nov 2026 . 10:59", "UberX e 16 nov 2026 e 10:59", "Uber X - 16 nov. 2026 - 10.59", "Uber X 16 nov 2026 10:59")) {
+            val r = HistoryParser.parse(listOf("Detalles del viaje", line, "2.102 CLP", "3.63 km"), zone, today)
+            assertEquals(ms(2026, 11, 16, 10, 59), r?.time, line)
+        }
+    }
 }

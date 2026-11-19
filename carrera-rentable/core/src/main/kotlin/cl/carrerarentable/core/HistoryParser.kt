@@ -27,9 +27,10 @@ object HistoryParser {
 
     private val o = setOf(RegexOption.IGNORE_CASE)
     // "16 nov 2026 • 10:59" / "16 nov., 18:07" / "lun 16 nov, 18:07"
-    private val DATE_FULL = Regex("""(\d{1,2})\s+(ene|feb|mar|abr|may|jun|jul|ago|sep|set|oct|nov|dic)[a-z]*\.?(?:\s+(?:de\s+)?(\d{4}))?\s*[•·,\-]?\s*(\d{1,2}):(\d{2})""", o)
+    // El separador entre la fecha y la hora puede leerse como "•", "·", ".", "-", "e"... (reconocimiento de imagen).
+    private val DATE_FULL = Regex("""(\d{1,2})\s*(?:de\s+)?(ene|feb|mar|abr|may|jun|jul|ago|sep|set|oct|nov|dic)[a-z]*\.?(?:\s*(?:de\s+)?(\d{4}))?[^\d\n]{0,5}(\d{1,2})\s?[:.]\s?(\d{2})\b""", o)
     // "Hoy, 18:07" / "Ayer, 9:15"
-    private val DATE_REL = Regex("""\b(hoy|ayer)\s*,?\s*(\d{1,2}):(\d{2})""", o)
+    private val DATE_REL = Regex("""\b(hoy|ayer)[^\d\n]{0,4}(\d{1,2})\s?[:.]\s?(\d{2})\b""", o)
 
     private const val AMOUNT = """(\d{1,3}(?:[.,]\d{3})+|\d+)(?:[.,]\d{2}(?!\d))?"""
     private val PARA_TI = Regex("""\$\s?$AMOUNT\s*para ti""", o)

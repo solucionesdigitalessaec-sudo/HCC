@@ -45,7 +45,14 @@ object HistoryImporter {
 
     /** Texto de una captura (hilo principal). */
     fun onLines(c: Context, lines: List<String>) {
-        val r = HistoryParser.parse(lines) ?: return
+        val r = HistoryParser.parse(lines)
+        if (r == null) {
+            // Para el diagnóstico: se ve un detalle de viaje pero no se pudo leer (fecha, empresa...).
+            if (lines.any { Regex("""(?i)detalles del viaje|para ti|tus ganancias""").containsMatchIn(it) }) {
+                Diag.ocr(c, "historial: se ve un viaje pero no se reconoció la fecha y hora", lines)
+            }
+            return
+        }
         val key = "${r.app}|${r.time}"
         val prev = partial[key]
         val merged = HistoryRead(
