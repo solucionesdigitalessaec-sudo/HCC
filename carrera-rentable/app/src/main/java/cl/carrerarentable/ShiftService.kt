@@ -37,9 +37,9 @@ import com.google.mlkit.vision.text.latin.TextRecognizerOptions
  * de Uber / Cabify / DiDi y muestra el panel.
  *
  * Para no hacer lento el teléfono (Waze, Uber...):
- *  - la pantalla virtual queda en pausa entre capturas (si no, Android copia la pantalla ~60 veces
- *    por segundo para esta app),
- *  - cada 2 s en modo tranquilo; cada 1 s solo mientras en pantalla hay km o montos,
+ *  - la pantalla virtual queda conectada de forma fija: pausarla y reanudarla hace que Android avise
+ *    "pantalla cambiada" a todas las apps y a la barra del sistema (en Xiaomi eso la pegaba),
+ *  - modo liviano: cada 3 s en modo tranquilo y cada 1,5 s mientras en pantalla hay km o montos,
  *  - si la pantalla no cambió, no se vuelve a reconocer el texto,
  *  - todo el trabajo corre con prioridad baja ("de fondo") y reutiliza la memoria.
  */
@@ -69,9 +69,10 @@ class ShiftService : Service() {
     private var lastTouch = 0L
     /** Modo liviano (ajuste): menos lecturas y menor resolución. Se fija al empezar el turno. */
     private var light = true
-    private val fastMs get() = if (light) 1500L else 1000L
-    private val slowMs get() = if (light) 3000L else 2000L
-    private val captureTimeout = Runnable { pauseDisplay(); busy = false }
+    /** Freno automático: si leer la pantalla le cuesta al teléfono (está ocupado), se espera más (hasta ×3). */
+    @Volatile private var backoff = 1.0
+    private val fastMs get() = ((if (light) 1500L else 1000L) * backoff).toLong()
+    private val slowMs get() = ((if (light) 3000L else 2000L) * backoff).toLong()
 
     /** Turno en la bitácora (para el $/hora real). Su fin se actualiza cada minuto. */
     private var shiftId = -1L
@@ -144,14 +145,7 @@ class ShiftService : Service() {
             "KMRentable", cw, ch, dpi,
             DisplayManager.VIRTUAL_DISPLAY_FLAG_AUTO_MIRROR, r.surface, null, workerHandler,
         )
-        pauseDisplay()
         recognizer = TextRecognition.getClient(TextRecognizerOptions.Builder().setExecutor(ocrExecutor).build())
-    }
-
-    /** Sin superficie, Android deja de copiar la pantalla para esta app. */
-    private fun pauseDisplay() {
-        runCatching { display?.surface = null }
-        reader?.setOnImageAvailableListener(null, null)
     }
 
     private fun screenSize(): Triple<Int, Int, Int> {
@@ -167,7 +161,7 @@ class ShiftService : Service() {
         }
     }
 
-    /** Corre en el hilo de captura: reanuda la pantalla virtual solo para tomar una imagen. */
+    /** Corre en el hilo de captura: toma la imagen más reciente (las anteriores se descartan). */
     private fun captureOnce() {
         if (busy) return
         val power = getSystemService(PowerManager::class.java)
@@ -176,18 +170,9 @@ class ShiftService : Service() {
             diag("Falta el permiso \"Mostrar sobre otras apps\": el panel no se puede mostrar")
             return
         }
-        val r = reader ?: return
-        val d = display ?: return
+        val image = runCatching { reader?.acquireLatestImage() }.getOrNull() ?: return
         busy = true
-        r.setOnImageAvailableListener({ ir ->
-            val image = runCatching { ir.acquireLatestImage() }.getOrNull() ?: return@setOnImageAvailableListener
-            workerHandler.removeCallbacks(captureTimeout)
-            pauseDisplay()
-            process(image)
-        }, workerHandler)
-        d.surface = r.surface
-        // Si la pantalla no entrega imagen (por ejemplo, no cambió nada), se vuelve a pausar.
-        workerHandler.postDelayed(captureTimeout, 1500)
+        process(image)
     }
 
     private fun process(image: android.media.Image) {
@@ -221,6 +206,7 @@ class ShiftService : Service() {
             return
         }
 
+        val started = android.os.SystemClock.elapsedRealtime()
         recognizer?.process(InputImage.fromBitmap(bitmap, 0))
             ?.addOnSuccessListener { result ->
                 val raw = result.textBlocks
@@ -242,7 +228,12 @@ class ShiftService : Service() {
                 }
             }
             ?.addOnFailureListener { e -> diag("error al reconocer texto: ${e.message}") }
-            ?.addOnCompleteListener { busy = false }
+            ?.addOnCompleteListener {
+                // Una lectura lenta (>700 ms) significa que el teléfono está ocupado: frenar.
+                val took = android.os.SystemClock.elapsedRealtime() - started
+                backoff = if (took > 700) minOf(backoff * 1.5, 3.0) else maxOf(backoff * 0.8, 1.0)
+                busy = false
+            }
             ?: run { busy = false }
     }
 
