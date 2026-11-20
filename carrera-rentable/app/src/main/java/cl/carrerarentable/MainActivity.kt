@@ -36,6 +36,7 @@ class MainActivity : Activity() {
     private lateinit var retention: EditText
     private lateinit var autoLog: CheckBox
     private lateinit var lightMode: CheckBox
+    private lateinit var keepOn: CheckBox
     private lateinit var hideSec: EditText
     private lateinit var vibrate: CheckBox
     private lateinit var cardOnly: CheckBox
@@ -119,6 +120,12 @@ class MainActivity : Activity() {
             setOnCheckedChangeListener { _, v -> SettingsStore.setLightMode(this@MainActivity, v) }
         }
         col.addView(lightMode)
+        keepOn = CheckBox(this).apply {
+            text = "Mantener la pantalla encendida durante el turno (si se bloquea, Android puede cortar el turno)"
+            isChecked = SettingsStore.keepScreenOn(this@MainActivity)
+            setOnCheckedChangeListener { _, v -> SettingsStore.setKeepScreenOn(this@MainActivity, v) }
+        }
+        col.addView(keepOn)
         col.addView(note(
             "Al empezar, Android pregunta si permites grabar la pantalla: elige \"Pantalla completa\" y toca " +
                 "\"Empezar\". Android lo pregunta en cada turno; no se puede guardar. Luego abre Uber, Cabify o DiDi."
@@ -194,6 +201,12 @@ class MainActivity : Activity() {
 
     override fun onResume() {
         super.onResume()
+        // El turno estaba marcado como activo pero ya no corre: el sistema cerró la app sin avisar.
+        if (Diag.shiftFlag(this) && !ShiftService.running) {
+            Diag.setShiftFlag(this, false)
+            Diag.shiftEnded(this, "el sistema cerró KMRentable sin avisar (ahorro de batería o memoria)")
+            Toast.makeText(this, "El turno anterior se cortó: el teléfono cerró la app. Revisa los pasos de batería.", Toast.LENGTH_LONG).show()
+        }
         refreshSetup()
         diag.text = Diag.report(this)
         refreshShift()
@@ -253,6 +266,12 @@ class MainActivity : Activity() {
                 "En \"Otros permisos\" activa \"Mostrar ventanas emergentes mientras se ejecuta en segundo plano\".",
                 "Abrir otros permisos",
             ) { openXiaomiPermissions() })
+            setupBox.addView(step(
+                n++, "Xiaomi: inicio automático y apps recientes", null,
+                "Activa \"Inicio automático\" para KMRentable. Además, en apps recientes mantén presionada " +
+                    "la tarjeta de KMRentable y toca el candado: así Xiaomi no la cierra durante el turno.",
+                "Abrir inicio automático",
+            ) { openXiaomiAutostart() })
         }
         val batteryOk = if (xiaomi) null else
             getSystemService(android.os.PowerManager::class.java).isIgnoringBatteryOptimizations(packageName)
@@ -303,6 +322,11 @@ class MainActivity : Activity() {
             if (runCatching { startActivity(miui) }.isSuccess) return
         }
         openAppDetails()
+    }
+
+    private fun openXiaomiAutostart() {
+        val i = Intent().setClassName("com.miui.securitycenter", "com.miui.permcenter.autostart.AutoStartManagementActivity")
+        runCatching { startActivity(i) }.onFailure { openAppDetails() }
     }
 
     private fun openXiaomiPermissions() {

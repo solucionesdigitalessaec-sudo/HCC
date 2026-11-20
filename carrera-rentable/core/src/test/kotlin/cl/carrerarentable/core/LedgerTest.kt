@@ -68,6 +68,12 @@ class LedgerTest {
     }
 
     @Test
+    fun nextTripAcceptance() {
+        assertTrue(TripStateDetector.looksNextTripAccepted(listOf("Navegar", "Siguiente viaje: Carolina", "Iniciar UberX")))
+        assertFalse(TripStateDetector.looksNextTripAccepted(listOf("Navegar", "PIN obligatorio", "Iniciar UberX")))
+    }
+
+    @Test
     fun appGuess() {
         assertEquals("Cabify", RideAppGuess.from(listOf("$ 3.855 para ti")))
         assertEquals("Uber", RideAppGuess.from(listOf("CLP9,518", "Uber Priority")))

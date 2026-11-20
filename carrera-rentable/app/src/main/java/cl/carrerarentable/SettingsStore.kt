@@ -46,6 +46,10 @@ object SettingsStore {
     fun lightMode(c: Context) = prefs(c).getBoolean("modo_liviano", true)
     fun setLightMode(c: Context, v: Boolean) = prefs(c).edit().putBoolean("modo_liviano", v).apply()
 
+    /** Mantener la pantalla encendida durante el turno (si se bloquea, Android puede cortar la grabación). */
+    fun keepScreenOn(c: Context) = prefs(c).getBoolean("pantalla_encendida", true)
+    fun setKeepScreenOn(c: Context, v: Boolean) = prefs(c).edit().putBoolean("pantalla_encendida", v).apply()
+
     /** Última empresa con la que se empezó un turno. */
     fun lastApp(c: Context) = prefs(c).getString("ultima_app", "Cabify") ?: "Cabify"
     fun setLastApp(c: Context, v: String) = prefs(c).edit().putString("ultima_app", v).apply()

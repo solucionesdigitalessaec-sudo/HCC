@@ -88,10 +88,26 @@ class ShiftService : Service() {
         }
     }
 
+    /** Motivo del fin del turno (null = todavía no se sabe). */
+    private var stopReason: String? = null
+    /** Ventana invisible de 1 px que mantiene la pantalla encendida durante el turno. */
+    private var keepOnView: android.view.View? = null
+
+    override fun onCreate() {
+        super.onCreate()
+        // Si algo falla, que quede escrito el motivo antes de que la app se cierre.
+        val previous = Thread.getDefaultUncaughtExceptionHandler()
+        Thread.setDefaultUncaughtExceptionHandler { t, e ->
+            runCatching { Diag.shiftEnded(this, "error en la app: ${e.javaClass.simpleName}: ${e.message}") }
+            previous?.uncaughtException(t, e)
+        }
+    }
+
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         if (intent?.action == ACTION_STOP) {
+            stopReason = "lo terminaste tú"
             stopSelf()
             return START_NOT_STICKY
         }
@@ -113,18 +129,23 @@ class ShiftService : Service() {
         val mp = runCatching { mpm.getMediaProjection(resultCode, data) }.getOrNull()
         if (mp == null) {
             Diag.ocr(this, "No se pudo iniciar la captura de pantalla")
+            stopReason = "no se pudo iniciar la grabación de pantalla"
             stopSelf()
             return START_NOT_STICKY
         }
         projection = mp
         mp.registerCallback(object : MediaProjection.Callback() {
             override fun onStop() {
+                // Android cortó la grabación (pantalla bloqueada, otra app que graba, el sistema...).
+                if (stopReason == null) stopReason = "Android detuvo la grabación de pantalla"
                 handler.post { stopSelf() }
             }
         }, handler)
 
         startCapture(mp)
         running = true
+        Diag.setShiftFlag(this, true)
+        if (SettingsStore.keepScreenOn(this)) addKeepScreenOn()
         Diag.ocr(this, "Turno iniciado")
         // Si solo se está importando el historial, no cuenta como turno de trabajo.
         if (!HistoryImporter.active) workerHandler.post { shiftId = TripLog.get(this).startShift(System.currentTimeMillis(), currentApp) }
@@ -283,7 +304,45 @@ class ShiftService : Service() {
             .build()
     }
 
+    /** Ventana invisible con FLAG_KEEP_SCREEN_ON: la pantalla no se apaga ni se bloquea durante el turno. */
+    private fun addKeepScreenOn() {
+        if (!OfferController.canDraw(this) || keepOnView != null) return
+        val v = android.view.View(this)
+        val lp = WindowManager.LayoutParams(
+            1, 1, WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
+            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or
+                WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON,
+            PixelFormat.TRANSLUCENT,
+        ).apply { gravity = android.view.Gravity.TOP or android.view.Gravity.START; alpha = 0f }
+        runCatching { getSystemService(WindowManager::class.java).addView(v, lp) }.onSuccess { keepOnView = v }
+    }
+
+    /** Aviso con sonido cuando el turno se corta sin que el conductor lo haya terminado. */
+    private fun notifyUnexpectedStop(reason: String) {
+        val nm = getSystemService(NotificationManager::class.java)
+        if (Build.VERSION.SDK_INT >= 26) {
+            nm.createNotificationChannel(NotificationChannel(ALERT_CHANNEL, "Avisos del turno", NotificationManager.IMPORTANCE_HIGH))
+        }
+        val open = PendingIntent.getActivity(
+            this, 2, Intent(this, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK), PendingIntent.FLAG_IMMUTABLE,
+        )
+        val n = Notification.Builder(this, ALERT_CHANNEL)
+            .setSmallIcon(R.drawable.ic_stat)
+            .setContentTitle("⚠️ El turno se detuvo")
+            .setContentText("Toca para reanudarlo. Motivo: $reason")
+            .setContentIntent(open)
+            .setAutoCancel(true)
+            .build()
+        runCatching { nm.notify(ALERT_ID, n) }
+    }
+
     override fun onDestroy() {
+        val reason = stopReason ?: "el sistema detuvo el servicio"
+        Diag.shiftEnded(this, reason)
+        Diag.setShiftFlag(this, false)
+        if (stopReason != "lo terminaste tú" && running) notifyUnexpectedStop(reason)
+        keepOnView?.let { v -> runCatching { getSystemService(WindowManager::class.java).removeView(v) } }
+        keepOnView = null
         running = false
         currentApp = null
         HistoryImporter.onShiftEnded()
@@ -305,6 +364,8 @@ class ShiftService : Service() {
     companion object {
         private const val CHANNEL = "turno"
         private const val NOTIF_ID = 7
+        private const val ALERT_CHANNEL = "avisos_turno"
+        private const val ALERT_ID = 8
         /** Lectura rápida mientras en pantalla haya km o montos; después vuelve al modo tranquilo. */
         private const val FAST_WINDOW_MS = 20_000L
         private val INTERESTING = Regex("""\d\s*km\b|\$\s?\d|CLP\s?\d|\d\s?CLP""", RegexOption.IGNORE_CASE)

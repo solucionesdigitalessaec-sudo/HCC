@@ -107,11 +107,13 @@ object OfferParser {
 
         for (re in TIME_THEN_DIST) for (m in re.findAll(text)) {
             if (overlaps(m.range)) continue
-            legs += m.range to Leg(minutes(m.groupValues[1], m.groupValues[2]), km(m.groupValues[3], m.groupValues[4]))
+            val leg = plausible(minutes(m.groupValues[1], m.groupValues[2]), km(m.groupValues[3], m.groupValues[4])) ?: return null
+            legs += m.range to leg
         }
         for (re in DIST_THEN_TIME) for (m in re.findAll(text)) {
             if (overlaps(m.range)) continue
-            legs += m.range to Leg(minutes(m.groupValues[3], m.groupValues[4]), km(m.groupValues[1], m.groupValues[2]))
+            val leg = plausible(minutes(m.groupValues[3], m.groupValues[4]), km(m.groupValues[1], m.groupValues[2])) ?: return null
+            legs += m.range to leg
         }
 
         val distanceKm: Double
@@ -173,6 +175,24 @@ object OfferParser {
         val start = text.lastIndexOf('\n', pos - 1).let { if (it < 0) 0 else it + 1 }
         val end = text.indexOf('\n', pos).let { if (it < 0) text.length else it }
         return text.substring(start, end)
+    }
+
+    /** Velocidad máxima creíble de un tramo en ciudad o carretera (km/h). */
+    private const val MAX_KMH = 110.0
+
+    /**
+     * El reconocimiento de imagen a veces se come el punto decimal: "7.4 km" se lee "74 km".
+     * Si el tramo da una velocidad imposible, se prueba con un decimal (74 -> 7,4); si sigue
+     * siendo imposible, la lectura no sirve (null).
+     */
+    private fun plausible(minutes: Double, km: Double): Leg? {
+        if (minutes <= 0) return Leg(minutes, km)
+        fun ok(k: Double) = k / (minutes / 60.0) <= MAX_KMH
+        return when {
+            ok(km) -> Leg(minutes, km)
+            ok(km / 10.0) -> Leg(minutes, km / 10.0)
+            else -> null
+        }
     }
 
     /** Montos en CLP: el punto y la coma seguidos de 3 dígitos son separadores de miles. */

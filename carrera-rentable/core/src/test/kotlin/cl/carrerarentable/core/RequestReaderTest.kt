@@ -165,4 +165,21 @@ class RequestReaderTest {
     fun cabifyCardWithoutLegsIsIgnored() {
         assertNull(OfferParser.parseRequest(listOf("Cabify", "$ 3.855 para ti", "Macul")))
     }
+
+    @Test
+    fun missingDecimalPointIsFixedBySpeed() {
+        // "7.4 km" leído como "74 km" en un tramo de 15 min (296 km/h): se corrige a 7,4.
+        val o = OfferParser.parseRequest(listOf("CLP4,206", "5 min • 26 km", "15 min • 74 km", "Pago con tarjeta", "Aceptar"))
+        assertNotNull(o)
+        assertTrue(kotlin.math.abs(o.distanceKm - 10.0) < 0.01, "km = ${o.distanceKm}")
+        // Integer km de Cabify sin decimales siguen igual.
+        val c = OfferParser.parseRequest(listOf("Cabify", "$ 3.855 para ti", "14 min · 4 km", "17 min · 5 km"))
+        assertEquals(9.0, c?.distanceKm)
+    }
+
+    @Test
+    fun impossibleLegIsDiscarded() {
+        // 2 min y 900 km: ni con un decimal tiene sentido.
+        assertNull(OfferParser.parseRequest(listOf("CLP4,206", "2 min • 900 km", "15 min • 7.4 km", "Aceptar")))
+    }
 }

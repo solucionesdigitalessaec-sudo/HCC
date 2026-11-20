@@ -32,7 +32,17 @@ object OfferController {
     private var dismissedPrice: Double? = null
 
     /** Última solicitud vista: si después aparece la pantalla de "ir a buscar al pasajero", se anota. */
-    private class Candidate(val offer: RideOffer, val app: String, val signature: String, var lastSeen: Long, var logged: Boolean = false)
+    /**
+     * inTrip: la solicitud llegó estando en otro viaje (la pantalla de viaje ya se veía). Ahí la pantalla
+     * de viaje sigue visible aunque la solicitud se rechace, así que solo se anota con una señal clara
+     * de "siguiente viaje".
+     */
+    private class Candidate(
+        val offer: RideOffer, val app: String, val signature: String, var lastSeen: Long,
+        val inTrip: Boolean, var logged: Boolean = false, var reported: Boolean = false,
+    )
+    /** Última vez que se vio la pantalla de un viaje en curso (ir a buscar / llevar al pasajero). */
+    private var lastTripScreenAt = 0L
     private var candidate: Candidate? = null
     /** Cuánto tiempo después de ver la solicitud se acepta la pantalla de recogida como "la aceptó". */
     private const val ACCEPT_WINDOW_MS = 90_000L
@@ -94,17 +104,32 @@ object OfferController {
             cur.lastSeen = now
         } else {
             // La empresa del turno manda; si no hay, se adivina por la pantalla.
-            candidate = Candidate(offer, ShiftService.currentApp ?: RideAppGuess.from(lines), signature, now)
+            candidate = Candidate(
+                offer, ShiftService.currentApp ?: RideAppGuess.from(lines), signature, now,
+                inTrip = lastTripScreenAt > 0 && now - lastTripScreenAt < 30_000,
+            )
         }
     }
 
     /** Si justo después de una solicitud aparece la pantalla de recogida, se anota en la bitácora. */
     private fun checkAccepted(c: Context, lines: List<String>) {
-        val cand = candidate ?: return
         val now = SystemClock.elapsedRealtime()
+        val tripScreen = TripStateDetector.looksAccepted(lines)
+        val wasInTripBefore = lastTripScreenAt
+        if (tripScreen) lastTripScreenAt = now
+        val cand = candidate ?: return
         if (now - cand.lastSeen > ACCEPT_WINDOW_MS) { candidate = null; return }
         if (cand.logged || !SettingsStore.autoLog(c)) return
-        if (!TripStateDetector.looksAccepted(lines)) return
+        if (!tripScreen) return
+        if (cand.inTrip && !TripStateDetector.looksNextTripAccepted(lines)) {
+            // Solicitud que llegó durante otro viaje: sin señal de "siguiente viaje" no se anota
+            // (lo más probable es que se haya dejado pasar). Se puede agregar a mano.
+            if (!cand.reported && wasInTripBefore != 0L) {
+                cand.reported = true
+                Diag.ocr(c, "solicitud durante un viaje: no se anotó (sin señal de siguiente viaje)", lines)
+            }
+            return
+        }
         cand.logged = true
         val trip = Ledger.tripFromOffer(cand.offer, cand.app, System.currentTimeMillis())
         Thread { TripLog.get(c).add(trip) }.start()

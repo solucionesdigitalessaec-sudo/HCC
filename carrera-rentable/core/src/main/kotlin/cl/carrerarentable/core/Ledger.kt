@@ -114,6 +114,12 @@ object TripStateDetector {
         RegexOption.IGNORE_CASE,
     )
 
+    /** Señal de que se aceptó el SIGUIENTE viaje estando en otro (Uber "Siguiente viaje", etc.). */
+    private val NEXT_TRIP = Regex("""siguiente (viaje|recogida|pasajero)|pr[oó]ximo (viaje|pasajero)|viaje en cola|a continuaci[oó]n""", RegexOption.IGNORE_CASE)
+
+    fun looksNextTripAccepted(lines: List<String>): Boolean =
+        looksAccepted(lines) && lines.any { NEXT_TRIP.containsMatchIn(it) }
+
     fun looksAccepted(lines: List<String>): Boolean {
         if (lines.isEmpty() || ScreenFilter.hasAcceptButton(lines)) return false
         return lines.any { ACCEPTED.containsMatchIn(it) }
