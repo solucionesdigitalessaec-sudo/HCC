@@ -115,7 +115,7 @@ class MainActivity : Activity() {
         col.addView(logButton)
         lightMode = CheckBox(this).apply {
             text = "Modo liviano (recomendado): lee la pantalla con menos frecuencia para que Waze y Uber no se pongan lentos. " +
-                "El panel puede tardar 2 a 4 segundos. Se aplica al empezar el turno."
+                "El panel puede tardar 1 a 3 segundos. Se aplica al empezar el turno."
             isChecked = SettingsStore.lightMode(this@MainActivity)
             setOnCheckedChangeListener { _, v -> SettingsStore.setLightMode(this@MainActivity, v) }
         }

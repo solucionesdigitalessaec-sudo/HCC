@@ -63,8 +63,9 @@ object OfferController {
 
     /**
      * Texto de una captura. Para evitar "carreras fantasma":
-     *  - lectura estricta de la solicitud (ver OfferParser.parseRequest),
-     *  - la misma solicitud debe leerse igual en dos capturas seguidas antes de mostrarla.
+     *  - lectura estricta de la solicitud (ver OfferParser.parseRequest): botón para aceptar,
+     *    tarifa arriba y exactamente dos tramos. Con eso se muestra apenas se lee (más rápido);
+     *    si la lectura siguiente sale distinta, el panel se actualiza.
      * Devuelve true si hay una solicitud en pantalla.
      */
     fun onScreenText(c: Context, lines: List<String>): Boolean {
@@ -83,12 +84,6 @@ object OfferController {
         }
         val signature = signatureOf(offer)
         rememberCandidate(offer, lines, signature)
-        val alreadyShown = signature == lastSignature && p.isShowing
-        if (!alreadyShown && signature != pendingSignature) {
-            pendingSignature = signature
-            lastOfferAt = SystemClock.elapsedRealtime() // no ocultar el panel actual mientras tanto
-            return true
-        }
         pendingSignature = null
         handleOffer(c, offer, lines)
         return true
@@ -156,6 +151,8 @@ object OfferController {
         val signature = signatureOf(offer)
         if (signature == lastSignature && p.isShowing) return
         lastSignature = signature
+        // Misma solicitud con una lectura un poco distinta (km/min): se actualiza el panel sin volver a sonar.
+        val sameOffer = p.isShowing && shownPrice?.let { kotlin.math.abs(it - offer.price) < 1.0 } == true
         shownPrice = offer.price
 
         SettingsStore.setLastText(c, OfferParser.normalize(lines).joinToString("\n"))
@@ -170,6 +167,7 @@ object OfferController {
             return
         }
         p.show(evaluation, rules, SettingsStore.hideSeconds(c))
+        if (sameOffer) return
         if (SettingsStore.vibrate(c)) buzz(c, evaluation.profitable)
         if (evaluation.profitable && SettingsStore.sound(c)) Alerts.playProfitable()
     }

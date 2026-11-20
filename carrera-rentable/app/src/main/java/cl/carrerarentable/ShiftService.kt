@@ -39,7 +39,7 @@ import com.google.mlkit.vision.text.latin.TextRecognizerOptions
  * Para no hacer lento el teléfono (Waze, Uber...):
  *  - la pantalla virtual queda conectada de forma fija: pausarla y reanudarla hace que Android avise
  *    "pantalla cambiada" a todas las apps y a la barra del sistema (en Xiaomi eso la pegaba),
- *  - modo liviano: cada 3 s en modo tranquilo y cada 1,5 s mientras en pantalla hay km o montos,
+ *  - modo liviano: cada 2,5 s en modo tranquilo y cada 1,5 s mientras en pantalla hay km o montos,
  *  - si la pantalla no cambió, no se vuelve a reconocer el texto,
  *  - todo el trabajo corre con prioridad baja ("de fondo") y reutiliza la memoria.
  */
@@ -72,7 +72,7 @@ class ShiftService : Service() {
     /** Freno automático: si leer la pantalla le cuesta al teléfono (está ocupado), se espera más (hasta ×3). */
     @Volatile private var backoff = 1.0
     private val fastMs get() = ((if (light) 1500L else 1000L) * backoff).toLong()
-    private val slowMs get() = ((if (light) 3000L else 2000L) * backoff).toLong()
+    private val slowMs get() = ((if (light) 2500L else 2000L) * backoff).toLong()
 
     /** Turno en la bitácora (para el $/hora real). Su fin se actualiza cada minuto. */
     private var shiftId = -1L
