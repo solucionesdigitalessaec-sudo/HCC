@@ -1,0 +1,185 @@
+package cl.carrerarentable.core
+
+import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertFalse
+import kotlin.test.assertNotNull
+import kotlin.test.assertNull
+import kotlin.test.assertTrue
+
+/** Lectura estricta: solo la tarjeta de una solicitud real abre el panel. */
+class RequestReaderTest {
+
+    private val uberRequest = listOf(
+        "Santiago", "Lo Barnechea", "Uber Priority", "Exclusivo", "CLP9,518", "CLP358/km est.",
+        "+CLP1,427.00 incluido para", "4 min • 1.6 km", "Avenida Ossa, Metro Plaza Egaña, La Reina",
+        "Tarjeta de crédito verifica...", "Pago con tarjeta", "5.00", "MARCO ANTONIO",
+        "29 min • 25.0 km", "Calle Pedro Riveros 1618, Quilicura", "Aceptar", "Codegua",
+    )
+
+    @Test
+    fun uberRequestIsRead() {
+        val o = OfferParser.parseRequest(uberRequest)
+        assertNotNull(o)
+        assertEquals(9518.0, o.price)
+        assertTrue(kotlin.math.abs(o.distanceKm - 26.6) < 0.01)
+        assertEquals(Payment.CARD, o.payment)
+        val ev = ProfitCalculator.evaluate(o, Rules(minPerKm = 600.0))
+        assertTrue(ev.paymentOk)
+        assertFalse(ev.profitable) // $358/km
+    }
+
+    @Test
+    fun didiRequestIsRead() {
+        val o = OfferParser.parseRequest(
+            listOf(
+                "Rechazo permitido", "Toca para aceptar la solicitud.", "Pago con tarjeta", "$1.847",
+                "$625 de tarifa base dinámica", "$96 de tarifa de gasolina", "yeri · 4,91 · 46 viajes",
+                "Tarjeta bancaria verificada", "7 min (3,7 km)", "Avenida Quilín 4931, Macul",
+                "5 min (2,4 km)", "Juvenal Hernández Jaque 4821, Macul",
+            )
+        )
+        assertNotNull(o)
+        assertEquals(1847.0, o.price)
+        assertEquals(Payment.CARD, o.payment)
+    }
+
+    @Test
+    fun pickupScreenDuringTripIsIgnored() {
+        // Captura 1 del conductor: ir a buscar a la pasajera (un solo tramo, sin "Aceptar").
+        assertNull(
+            OfferParser.parseRequest(
+                listOf("Navegar", "4 min 0.8 km", "PIN obligatorio", "Carolina", "Iniciar UberX", "$36.510")
+            )
+        )
+    }
+
+    @Test
+    fun uberWarningDialogWithAcceptButtonIsIgnored() {
+        // Captura 2: aviso de Uber con botón "Aceptar" pero sin tarifa ni tramos.
+        assertNull(
+            OfferParser.parseRequest(
+                listOf(
+                    "La información del usuario es solo para usarse durante el viaje",
+                    "Tomar capturas de pantalla o compartir direcciones fuera de la App infringe los términos",
+                    "4 min 0.7 km", "Aceptar",
+                )
+            )
+        )
+    }
+
+    @Test
+    fun earningsTabIsIgnored() {
+        assertNull(
+            OfferParser.parseRequest(
+                listOf("Ganancias", "CLP45,300", "Esta semana", "CLP36,510", "12 viajes", "8 h 20 min en línea", "142.5 km")
+            )
+        )
+    }
+
+    @Test
+    fun priceBelowTheLegsIsNotAccepted() {
+        assertNull(OfferParser.parseRequest(listOf("4 min • 1.6 km", "29 min • 25.0 km", "CLP9,518", "Aceptar")))
+    }
+
+    @Test
+    fun cashRideIsNeverProfitable() {
+        val o = OfferParser.parseRequest(
+            listOf("$12.000", "Efectivo", "3 min (1,0 km)", "10 min (5,0 km)", "Aceptar")
+        )
+        assertNotNull(o)
+        assertEquals(Payment.CASH, o.payment)
+        val ev = ProfitCalculator.evaluate(o, Rules(minPerKm = 600.0)) // $2.000/km
+        assertTrue(ev.perKmOk)
+        assertFalse(ev.paymentOk)
+        assertFalse(ev.profitable)
+        // Si el conductor apaga "solo tarjeta", sí es rentable.
+        assertTrue(ProfitCalculator.evaluate(o, Rules(minPerKm = 600.0, cardOnly = false)).profitable)
+    }
+
+    @Test
+    fun realOcrTextWithLettersInsteadOfOnes() {
+        // Texto real reconocido por imagen en el turno (Uber, 13/11).
+        val ocr = """
+            86
+            Recoleta
+            Providencia
+            2 UberX Exclusivo
+            X
+            CLP6,117
+            B
+            CLP416/km est.
+            9 +CLPl,750.00 incluido
+            6 min• 2.l km
+            Avenida Vitacura, Vitacura
+            Tarjeta de crédito verifica...
+            * 4.96
+            Pago con tarjeta
+            Catalina
+            19 min 12.6 km
+            Municipalidad de Quinta
+            Normal, Quinta Normal
+            Aceptar
+        """.trimIndent().lines()
+        val o = OfferParser.parseRequest(ocr)
+        assertNotNull(o)
+        assertEquals(6117.0, o.price)
+        assertTrue(kotlin.math.abs(o.distanceKm - 14.7) < 0.01, "km = ${o.distanceKm}")
+        assertTrue(kotlin.math.abs(o.durationMin!! - 25.0) < 0.01)
+        assertEquals(Payment.CARD, o.payment)
+    }
+
+    @Test
+    fun ocrDigitFixDoesNotTouchWords() {
+        assertEquals("Calle Lo Ovalle 12 km", OfferParser.fixOcrDigits("Calle Lo Ovalle 12 km"))
+        assertEquals("6 min• 2.1 km", OfferParser.fixOcrDigits("6 min• 2.l km"))
+        assertEquals("+CLP1,750.00 incluido", OfferParser.fixOcrDigits("+CLPl,750.00 incluido"))
+        assertEquals("1O min (3,O km)".let { OfferParser.fixOcrDigits(it) }, "10 min (3,0 km)")
+    }
+
+    private val cabifyCard = listOf(
+        "Cabify", "$ 3.855 para ti", "14 min · 4 km", "Macul | Avenida Américo Vespucio,", "4451",
+        "17 min · 5 km", "La Florida | Calle Nor Poniente, 2866",
+    )
+
+    @Test
+    fun cabifyRequestListIsReadWithoutAcceptButton() {
+        val screen = listOf("Hola, Simón Alejandro", "HASTA EL LUNES 23", "Gana $ 180.000 extra", "6 / 150") +
+            cabifyCard + listOf("Sigue sumando", "A 144 puntos de subir", "Consigue nivel Plata", "Mapa", "Inicio", "Billetera")
+        val o = OfferParser.parseRequest(screen)
+        assertNotNull(o)
+        assertEquals(3855.0, o.price)
+        assertTrue(kotlin.math.abs(o.distanceKm - 9.0) < 0.01)
+        assertTrue(kotlin.math.abs(o.durationMin!! - 31.0) < 0.01)
+    }
+
+    @Test
+    fun cabifyListWithTwoRequestsShowsTheFirst() {
+        val second = listOf("Cabify", "$ 9.900 para ti", "3 min · 1 km", "Ñuñoa | Irarrázaval, 100", "20 min · 10 km", "Providencia | Lyon, 50")
+        val o = OfferParser.parseRequest(listOf("Gana $ 180.000 extra") + cabifyCard + second)
+        assertNotNull(o)
+        assertEquals(3855.0, o.price)
+    }
+
+    @Test
+    fun cabifyCardWithoutLegsIsIgnored() {
+        assertNull(OfferParser.parseRequest(listOf("Cabify", "$ 3.855 para ti", "Macul")))
+    }
+
+    @Test
+    fun missingDecimalPointIsFixedBySpeed() {
+        // "7.4 km" leído como "74 km" en un tramo de 15 min (296 km/h): se corrige a 7,4.
+        val o = OfferParser.parseRequest(listOf("CLP4,206", "5 min • 26 km", "15 min • 74 km", "Pago con tarjeta", "Aceptar"))
+        assertNotNull(o)
+        assertTrue(kotlin.math.abs(o.distanceKm - 10.0) < 0.01, "km = ${o.distanceKm}")
+        // Integer km de Cabify sin decimales siguen igual.
+        val c = OfferParser.parseRequest(listOf("Cabify", "$ 3.855 para ti", "14 min · 4 km", "17 min · 5 km"))
+        assertEquals(9.0, c?.distanceKm)
+    }
+
+    @Test
+    fun impossibleLegIsDiscarded() {
+        // 2 min y 900 km: ni con un decimal tiene sentido.
+        assertNull(OfferParser.parseRequest(listOf("CLP4,206", "2 min • 900 km", "15 min • 7.4 km", "Aceptar")))
+    }
+}

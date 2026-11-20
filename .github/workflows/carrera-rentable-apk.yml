@@ -1,0 +1,120 @@
+name: APK KMRentable
+
+on:
+  push:
+    paths:
+      - "carrera-rentable/**"
+      - ".github/workflows/carrera-rentable-apk.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: carrera-rentable
+    env:
+      VERSION: "1.${{ github.run_number }}"
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.14.3"
+
+      # Clave de firma fija guardada en la caché privada de Actions (nunca en el repositorio).
+      - name: Recuperar clave de firma
+        id: firma
+        uses: actions/cache@v4
+        with:
+          path: ~/.kmrentable-firma
+          key: kmrentable-firma-v1
+
+      - name: Crear clave de firma (solo la primera vez)
+        if: steps.firma.outputs.cache-hit != 'true'
+        run: |
+          mkdir -p ~/.kmrentable-firma
+          openssl rand -hex 24 > ~/.kmrentable-firma/pass
+          P="$(cat ~/.kmrentable-firma/pass)"
+          keytool -genkeypair -noprompt -keystore ~/.kmrentable-firma/kmrentable.keystore \
+            -storepass "$P" -keypass "$P" -alias kmrentable -keyalg RSA -keysize 2048 \
+            -validity 10000 -dname "CN=KMRentable, C=CL"
+
+      - name: Usar clave de firma
+        run: |
+          P="$(cat ~/.kmrentable-firma/pass)"
+          echo "::add-mask::$P"
+          echo "KMR_KEYSTORE=$HOME/.kmrentable-firma/kmrentable.keystore" >> "$GITHUB_ENV"
+          echo "KMR_STORE_PASS=$P" >> "$GITHUB_ENV"
+
+      - name: Pruebas y compilación
+        run: gradle :core:test :app:assembleDebug -PbuildNumber=${{ github.run_number }} --no-daemon
+
+      # AAB para Google Play: solo si existe la clave de subida en los secretos del repositorio
+      # (KMR_UPLOAD_KEYSTORE_B64 y KMR_UPLOAD_PASS). Ver carrera-rentable/play/CLAVE-DE-SUBIDA.md.
+      - name: Clave de subida para Google Play
+        env:
+          KS_B64: ${{ secrets.KMR_UPLOAD_KEYSTORE_B64 }}
+          KS_PASS: ${{ secrets.KMR_UPLOAD_PASS }}
+        run: |
+          if [ -n "$KS_B64" ] && [ -n "$KS_PASS" ]; then
+            echo "$KS_B64" | base64 -d > "$RUNNER_TEMP/kmrentable-upload.jks"
+            echo "KMR_UPLOAD_KEYSTORE=$RUNNER_TEMP/kmrentable-upload.jks" >> "$GITHUB_ENV"
+            echo "KMR_UPLOAD_PASS=$KS_PASS" >> "$GITHUB_ENV"
+            echo "HAS_UPLOAD=true" >> "$GITHUB_ENV"
+          else
+            echo "Sin clave de subida en los secretos: no se genera el AAB para Google Play."
+          fi
+
+      - name: AAB para Google Play
+        if: env.HAS_UPLOAD == 'true'
+        run: |
+          gradle :app:bundleRelease -PbuildNumber=${{ github.run_number }} --no-daemon
+          cp app/build/outputs/bundle/release/app-release.aab "kmrentable-v${VERSION}.aab"
+          rm -f "$RUNNER_TEMP/kmrentable-upload.jks"
+
+      - name: Subir AAB (Artifacts de esta ejecución)
+        if: env.HAS_UPLOAD == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: kmrentable-v${{ env.VERSION }}-google-play
+          path: carrera-rentable/kmrentable-v${{ env.VERSION }}.aab
+
+      - name: Nombrar APK con su versión
+        run: |
+          cp app/build/outputs/apk/debug/app-debug.apk kmrentable.apk
+          cp app/build/outputs/apk/debug/app-debug.apk "kmrentable-v${VERSION}.apk"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: kmrentable-v${{ env.VERSION }}
+          path: carrera-rentable/kmrentable-v${{ env.VERSION }}.apk
+
+      # Una release por versión: así quedan guardadas todas las que se construyen.
+      - name: Guardar esta versión
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: kmrentable-v${{ env.VERSION }}
+          target_commitish: ${{ github.sha }}
+          name: KMRentable v${{ env.VERSION }}
+          prerelease: true
+          body: "Versión ${{ env.VERSION }} · commit ${{ github.sha }}: ${{ github.event.head_commit.message }}"
+          files: carrera-rentable/kmrentable-v${{ env.VERSION }}.apk
+
+      # Enlace fijo que siempre apunta a la última versión.
+      - name: Actualizar "última versión"
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: kmrentable-ultima
+          name: KMRentable (última versión)
+          prerelease: true
+          body: "Última versión: ${{ env.VERSION }} · commit ${{ github.sha }}."
+          files: carrera-rentable/kmrentable.apk
